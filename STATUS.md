@@ -6,7 +6,7 @@ Diese Datei ist die Zielliste des Projekts. Sie wird bei jeder Etappe nachgefüh
 
 **Arbeitsweise:** Kleine Etappen mit Akzeptanzkriterien und Tests. Fachliche Inhalte (Ausbildung, Prüfungsordnungen CH/EU, Tierschutz, Trainingsmethoden) werden erst aufgenommen, wenn sie mit Quellen geprüft sind (Chain of Verification). Nicht Verifiziertes wird gekennzeichnet.
 
-Stand: 2026-10-16 (Etappen 1 bis 5)
+Stand: 2026-10-16 (Etappen 1 bis 6)
 
 ## Nächster Schritt
 
@@ -84,11 +84,39 @@ Chain of Verification (16.10.2026):
 - Nicht belegt: eigene offizielle Regeln für Jägerinnen und Jäger mit Jagdhund; kantonale Einschränkungen der Jagd mit Hund in Einsatzgebieten. Beides steht so in der App.
 - Die Übungsvorschläge sind keine Fachaussage, sondern aus den Regeln abgeleitet und in der App so gekennzeichnet.
 
+### ✅ Etappe 6: Ausbildung zum Herdenschutzhund
+
+Wunsch von Jules (2026-10-16): «baue ein training ein um den hund als herdenschutzhund auszubilden». Umfang (Auswahlkarte, Standard «Eigener Hund»): Ausbildungsplan mit Phasen, Prüfung des Bundes, Übungsvorschlägen mit Fortschritt aus dem Tagebuch. Unterseite von Herdenschutz (`#/herdenschutz/ausbildung`), damit die Navigation bei fünf Menüpunkten bleibt.
+
+Akzeptanzkriterien:
+
+- [x] Von «Herdenschutz» aus erreichbar, offline verfügbar (E2E-Test)
+- [x] Offizieller Weg (Sachkundekurs, Verein HSH-CH, Eignungsprüfung des Bundes, Amicus) mit Quellen
+- [x] Fünf Phasen mit Altersangaben, jede mit Quellenangabe (Unit- und E2E-Test)
+- [x] Ablauf und Kriterien der Eignungsprüfung (Unit- und E2E-Test)
+- [x] Übungsvorschläge je Phase, jede einem Prüfungskriterium zugeordnet und als Vorschlag von Schnuffel gekennzeichnet (Unit-Test)
+- [x] «Ins Tagebuch» füllt die Übung in einer neuen Einheit vor; der Plan zeigt je Übung Anzahl Einträge und letzte Bewertung (E2E-Test)
+- [x] Abschnitt «Was nicht belegt ist»
+
+Chain of Verification (16.10.2026):
+
+- Geprüft und übereinstimmend: Anerkennung nur über die Eignungsprüfung des Bundes (AGRIDEA im Auftrag des BAFU), Mindestalter 18 Monate (AGRIDEA-Merkblatt September 2025), spätestens im zweiten Anlauf (LID 28.4.2026, TierWelt 24.7.2025), Prüfungsablauf und Kriterien (AGRIDEA-Merkblatt EBÜ 2023, TierWelt, BauernZeitung 11.12.2025), Sozialisierung auf drei Ebenen (HSH-CH, Wegleitung Zentralschweiz 30.1.2026, AGRIDEA 2025), Sachkundekurs und Beiträge (Wegleitung Zentralschweiz).
+- Abweichung: Das EBÜ-Merkblatt 2023 nennt ein Aufgebot mit 15 bis 18 Monaten, das Merkblatt 2025 ein Mindestalter von 18 Monaten. Beides steht so in der App.
+- Nicht belegt: amtlich vorgegebene Übungen (Regelwerk HSH-CH nur für Mitglieder), kantonale Rassenlisten, Regeln anderer Kantone als UR/LU/SZ/ZG/AG/NW, Zulassung eines Jagdhundes zur Prüfung. Alles steht so in der App.
+- Hinweis an Jules: Herdenschutzhunde sind keine Jagdhunde. Die App sagt das deutlich und verweist auf die Beratungsstellen.
+
 ### ⬜ Später: Fachinhalte (nur geprüft)
 
 - [ ] Übungskatalog nach Ausbildungsbereichen, mit Quellen
 - [ ] Bezug zu Prüfungsordnungen (welche, ist offen)
 - [ ] Mehrere Hunde
+
+## Annahmen (Etappe 6)
+
+- **Unterseite statt sechstem Menüpunkt.** Der Ausbildungsplan hängt unter «Herdenschutz». Bei weiteren Fachthemen kommt ein Menüpunkt «Wissen».
+- **Fortschritt wird aus dem Tagebuch berechnet,** über den exakten Übungsnamen. Wer den Namen beim Erfassen ändert, sieht den Eintrag nicht im Plan. Dafür braucht es keine neue Datenstruktur und kein Datenformat-Update.
+- **Vorausfüllen über die Adresse** (`#/training/neu?uebung=Name`), damit der Link offline und ohne Zwischenspeicher funktioniert.
+- **Übungen sind abgeleitet,** je eine pro Prüfungskriterium und Sozialisierungsgrundsatz. Sie sind in der App als Vorschlag von Schnuffel gekennzeichnet.
 
 ## Annahmen (Etappe 5)
 

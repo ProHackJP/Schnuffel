@@ -7,6 +7,7 @@ const STATIC = {
   '/training': 'training',
   '/training/neu': 'training-neu',
   '/herdenschutz': 'herdenschutz',
+  '/herdenschutz/ausbildung': 'herdenschutz-ausbildung',
   '/info': 'info',
 };
 

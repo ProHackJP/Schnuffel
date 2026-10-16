@@ -2,8 +2,9 @@ import { parseHash, tabFor } from './router.js';
 import { createStore, parseBackup, DATA_KEY, RATINGS, BACKUP_REMINDER_DAYS } from './store.js';
 import { openBrowserBackend } from './storage.js';
 import { SECTIONS, SOURCES, EXERCISE_SUGGESTIONS, GAPS, MAP_URL } from './content/herdenschutz.js';
+import * as HSH from './content/hsh-ausbildung.js';
 
-export const APP_VERSION = '0.4.0';
+export const APP_VERSION = '0.5.0';
 
 // Nur Vorschläge zur schnelleren Eingabe, jede andere Angabe ist ebenfalls möglich.
 const GAME_SUGGESTIONS = ['Reh', 'Rothirsch', 'Gämse', 'Wildschwein', 'Fuchs', 'Feldhase', 'Kaninchen', 'Fasan', 'Rebhuhn', 'Stockente', 'Taube'];
@@ -129,7 +130,10 @@ const views = {
       location.replace('#/training');
       return [];
     }
-    return [h('h1', {}, 'Neue Einheit'), await sessionForm(store, null)];
+    // Aus dem Ausbildungsplan kann eine Übung vorausgefüllt werden: #/training/neu?uebung=Name
+    const params = new URLSearchParams(location.hash.split('?')[1] ?? '');
+    const prefill = params.get('uebung') ? { exercises: [{ name: params.get('uebung').slice(0, 120) }] } : null;
+    return [h('h1', {}, 'Neue Einheit'), await sessionForm(store, null, prefill)];
   },
 
   async 'training-edit'(store, route) {
@@ -148,6 +152,12 @@ const views = {
       h('h1', {}, 'Herdenschutz'),
       h('p', {}, 'Wie du dich mit deinem Hund bei Herdenschutzhunden und geschützten Herden verhältst. Die Regeln stammen von der Fachstelle Herdenschutz Schweiz und vom Bund.'),
       h('p', {}, h('a', { class: 'button', href: MAP_URL, target: '_blank', rel: 'noopener' }, 'Karte der Einsatzgebiete')),
+      h(
+        'p',
+        { class: 'card' },
+        h('strong', {}, 'Eigenen Hund zum Herdenschutzhund ausbilden? '),
+        h('a', { href: '#/herdenschutz/ausbildung' }, 'Zum Ausbildungsplan'),
+      ),
       SECTIONS.map((section) => [
         h('h2', {}, section.title),
         h('ul', { class: 'card rules' }, section.items.map((item) => h('li', {}, item))),
@@ -168,6 +178,93 @@ const views = {
         'ul',
         { class: 'card rules sources', 'aria-label': 'Quellen' },
         SOURCES.map((s) =>
+          h('li', {}, h('a', { href: s.url, target: '_blank', rel: 'noopener' }, s.title), h('span', { class: 'muted' }, ` – ${s.publisher}, abgerufen am ${formatDate(s.retrieved)}`)),
+        ),
+      ),
+    ];
+  },
+
+  async 'herdenschutz-ausbildung'(store) {
+    const sourceById = Object.fromEntries(HSH.SOURCES.map((s) => [s.id, s]));
+    const sourceRefs = (ids) =>
+      h('p', { class: 'muted small' }, 'Quelle: ', ids.map((id, i) => [i > 0 && ', ', sourceById[id].publisher]));
+
+    // Fortschritt je Übung aus dem Tagebuch: Anzahl Einträge und letzte Bewertung (Einheiten sind neueste zuerst).
+    const progress = new Map();
+    if (await store.getDog()) {
+      for (const session of await store.listSessions()) {
+        for (const exercise of session.exercises) {
+          const entry = progress.get(exercise.name) ?? { count: 0, lastRating: null };
+          if (entry.count === 0) entry.lastRating = exercise.rating;
+          entry.count += 1;
+          progress.set(exercise.name, entry);
+        }
+      }
+    }
+    const progressText = (name) => {
+      const p = progress.get(name);
+      if (!p) return 'noch nicht geübt';
+      return `${p.count}× geübt${p.lastRating ? `, zuletzt ${p.lastRating}/5` : ''}`;
+    };
+    const exerciseItem = (e) =>
+      h(
+        'li',
+        {},
+        h('strong', {}, e.name),
+        ' ',
+        h('span', { class: 'muted' }, e.why),
+        h(
+          'div',
+          { class: 'small' },
+          h('span', { class: 'muted' }, `Prüfungskriterium: ${e.criterion}. Fortschritt: ${progressText(e.name)}.`),
+          ' ',
+          h('a', { href: `#/training/neu?uebung=${encodeURIComponent(e.name)}` }, 'Ins Tagebuch'),
+        ),
+      );
+
+    return [
+      h('h1', {}, 'Ausbildung zum Herdenschutzhund'),
+      h(
+        'p',
+        {},
+        'So wird in der Schweiz ein Herdenschutzhund ausgebildet und anerkannt: Phasen, Prüfung des Bundes und Übungen, die du im Tagebuch festhalten kannst. Die Angaben stammen von AGRIDEA, den Kantonen und dem Verein Herdenschutzhunde Schweiz.',
+      ),
+      h(
+        'p',
+        { class: 'card notice', role: 'note' },
+        'Herdenschutzhunde arbeiten selbstständig ohne Kommandos und sind keine Jagdhunde. Anerkannt wird nur, wer die Eignungsprüfung des Bundes besteht. Dieser Plan ersetzt weder den Sachkundekurs noch die Beratung.',
+      ),
+      h('h2', {}, 'Der offizielle Weg'),
+      h('ul', { class: 'card rules' }, HSH.OFFICIAL_PATH.items.map((item) => h('li', {}, item))),
+      sourceRefs(HSH.OFFICIAL_PATH.sources),
+      h('p', {}, h('a', { class: 'button', href: HSH.CONTACT_URL, target: '_blank', rel: 'noopener' }, 'Beratungsstellen bei Herdenschutz Schweiz')),
+      h('h2', {}, 'Phasen der Ausbildung'),
+      h('p', { class: 'muted small' }, 'Die Übungen in jeder Phase sind Vorschläge von Schnuffel, abgeleitet aus den Prüfungskriterien. Sie stammen nicht aus einer Quelle.'),
+      HSH.PHASES.map((phase) => {
+        const exercises = HSH.EXERCISES.filter((e) => e.phase === phase.id);
+        return [
+          h('h3', {}, phase.title, ' ', h('span', { class: 'muted' }, `(${phase.age})`)),
+          h('ul', { class: 'card rules' }, phase.items.map((item) => h('li', {}, item))),
+          sourceRefs(phase.sources),
+          exercises.length > 0 && h('ul', { class: 'card rules exercises-plan', 'aria-label': `Übungen ${phase.title}` }, exercises.map(exerciseItem)),
+        ];
+      }),
+      h('h2', {}, 'So läuft die Eignungsprüfung'),
+      h('ul', { class: 'card rules' }, HSH.EXAM.parts.map((item) => h('li', {}, item))),
+      h('h2', {}, 'Was geprüft wird'),
+      h(
+        'ul',
+        { class: 'card rules', 'aria-label': 'Prüfungskriterien' },
+        HSH.EXAM.criteria.map((c) => h('li', {}, h('strong', {}, c.name), ' ', h('span', { class: 'muted' }, c.text))),
+      ),
+      sourceRefs(HSH.EXAM.sources),
+      h('h2', {}, 'Was nicht belegt ist'),
+      h('ul', { class: 'card rules' }, HSH.GAPS.map((gap) => h('li', {}, gap))),
+      h('h2', {}, 'Quellen'),
+      h(
+        'ul',
+        { class: 'card rules sources', 'aria-label': 'Quellen' },
+        HSH.SOURCES.map((s) =>
           h('li', {}, h('a', { href: s.url, target: '_blank', rel: 'noopener' }, s.title), h('span', { class: 'muted' }, ` – ${s.publisher}, abgerufen am ${formatDate(s.retrieved)}`)),
         ),
       ),
@@ -253,12 +350,16 @@ function sessionItem(session) {
   );
 }
 
-async function sessionForm(store, session) {
+async function sessionForm(store, session, prefill = null) {
   const message = h('p', { class: 'message', role: 'status' });
   const exerciseList = h('div', { class: 'exercises' });
-  // Vorschläge: bereits verwendete Übungen zuerst, dann die Übungen aus dem Bereich Herdenschutz.
+  // Vorschläge: bereits verwendete Übungen zuerst, dann die Übungen aus Herdenschutz und Ausbildungsplan.
   const knownNames = [
-    ...new Set([...(await store.listSessions()).flatMap((s) => s.exercises.map((e) => e.name)), ...EXERCISE_SUGGESTIONS.map((e) => e.name)]),
+    ...new Set([
+      ...(await store.listSessions()).flatMap((s) => s.exercises.map((e) => e.name)),
+      ...EXERCISE_SUGGESTIONS.map((e) => e.name),
+      ...HSH.EXERCISES.map((e) => e.name),
+    ]),
   ];
 
   function renumber() {
@@ -294,7 +395,7 @@ async function sessionForm(store, session) {
     return fs;
   }
 
-  (session?.exercises.length ? session.exercises : [{}]).forEach(addExercise);
+  (session?.exercises.length ? session.exercises : (prefill?.exercises ?? [{}])).forEach(addExercise);
 
   const form = h(
     'form',
