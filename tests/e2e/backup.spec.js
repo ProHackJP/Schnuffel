@@ -53,6 +53,7 @@ test('Sicherung exportieren und auf leerem Gerät wiederherstellen', async ({ pa
   page2.once('dialog', (dialog) => dialog.accept());
   await page2.getByLabel('Wiederherstellen aus Sicherungsdatei').setInputFiles(path);
   await expect(page2.getByRole('status')).toHaveText('Wiederhergestellt: 1 Hund, 1 Einheiten.');
+  await expect(page2.getByText(/^Letzte Sicherung: /)).toBeVisible();
   await page2.goto('/#/');
   await expect(page2.getByRole('heading', { level: 1 })).toHaveText('Hallo Arko!');
   await page2.goto('/#/training');

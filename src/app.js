@@ -158,7 +158,7 @@ const views = {
           if (!confirm('Alle Daten auf diesem Gerät werden durch die Sicherung ersetzt. Fortfahren?')) return;
           const result = await store.importBackup(text);
           showMessage(message, 'ok', `Wiederhergestellt: ${result.dogs} Hund, ${result.sessions} Einheiten.`);
-          render();
+          lastExportEl.textContent = result.lastExportAt ? `Letzte Sicherung: ${formatDateTime(new Date(result.lastExportAt))}` : 'Noch keine Sicherung gemacht.';
         } catch (error) {
           showMessage(message, 'error', error.message);
         } finally {

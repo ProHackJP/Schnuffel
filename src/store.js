@@ -155,7 +155,7 @@ export function createStore(backend) {
     async importBackup(raw) {
       const data = parseBackup(raw);
       await save(data);
-      return { dogs: data.dogs.length, sessions: data.sessions.length };
+      return { dogs: data.dogs.length, sessions: data.sessions.length, lastExportAt: data.meta.lastExportAt };
     },
 
     async backupDue(now) {

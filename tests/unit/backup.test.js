@@ -33,7 +33,7 @@ test('Import stellt einen Export vollständig wieder her', async () => {
   const target = createStore(memoryBackend());
   await target.saveDog({ name: 'Anderer' });
   const result = await target.importBackup(JSON.stringify(backup));
-  assert.deepEqual(result, { dogs: 1, sessions: 2 });
+  assert.deepEqual(result, { dogs: 1, sessions: 2, lastExportAt: backup.exportedAt });
   assert.equal((await target.getDog()).name, 'Arko');
   assert.deepEqual(await target.listSessions(), sourceSessions);
   assert.equal((await target.load()).meta.lastExportAt, backup.exportedAt);
