@@ -37,6 +37,7 @@ Für die Browser-Tests einmalig `npx playwright install chromium` ausführen.
 | `src/app.js` | Ansichten und Ablauf |
 | `src/router.js` | Navigation über `#/pfad` |
 | `src/store.js` | Datenlogik: Hund und Trainingseinheiten, Validierung |
+| `src/content/herdenschutz.js` | Fachinhalt Herdenschutz mit Quellen (geprüft, siehe STATUS.md) |
 | `src/storage.js` | Speicher-Backends (IndexedDB, localStorage, Speicher für Tests) |
 | `sw.js` | Service Worker für den Offline-Betrieb |
 | `manifest.webmanifest` | Angaben für die Installation aufs Handy |

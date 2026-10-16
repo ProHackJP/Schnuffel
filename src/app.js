@@ -1,8 +1,9 @@
 import { parseHash, tabFor } from './router.js';
 import { createStore, parseBackup, DATA_KEY, RATINGS, BACKUP_REMINDER_DAYS } from './store.js';
 import { openBrowserBackend } from './storage.js';
+import { SECTIONS, SOURCES, EXERCISE_SUGGESTIONS, GAPS, MAP_URL } from './content/herdenschutz.js';
 
-export const APP_VERSION = '0.3.0';
+export const APP_VERSION = '0.4.0';
 
 // Nur Vorschläge zur schnelleren Eingabe, jede andere Angabe ist ebenfalls möglich.
 const GAME_SUGGESTIONS = ['Reh', 'Rothirsch', 'Gämse', 'Wildschwein', 'Fuchs', 'Feldhase', 'Kaninchen', 'Fasan', 'Rebhuhn', 'Stockente', 'Taube'];
@@ -18,7 +19,7 @@ function h(tag, attrs = {}, ...children) {
     else if (value === true) el.setAttribute(key, '');
     else if (value !== false && value != null) el.setAttribute(key, value);
   }
-  for (const child of children.flat()) {
+  for (const child of children.flat(Infinity)) {
     if (child == null || child === false) continue;
     el.append(child instanceof Node ? child : document.createTextNode(String(child)));
   }
@@ -139,6 +140,40 @@ const views = {
     return [h('h1', {}, 'Einheit bearbeiten'), await sessionForm(store, session)];
   },
 
+  async herdenschutz() {
+    const sourceById = Object.fromEntries(SOURCES.map((s) => [s.id, s]));
+    const sourceRefs = (ids) =>
+      h('p', { class: 'muted small' }, 'Quelle: ', ids.map((id, i) => [i > 0 && ', ', sourceById[id].publisher]));
+    return [
+      h('h1', {}, 'Herdenschutz'),
+      h('p', {}, 'Wie du dich mit deinem Hund bei Herdenschutzhunden und geschützten Herden verhältst. Die Regeln stammen von der Fachstelle Herdenschutz Schweiz und vom Bund.'),
+      h('p', {}, h('a', { class: 'button', href: MAP_URL, target: '_blank', rel: 'noopener' }, 'Karte der Einsatzgebiete')),
+      SECTIONS.map((section) => [
+        h('h2', {}, section.title),
+        h('ul', { class: 'card rules' }, section.items.map((item) => h('li', {}, item))),
+        sourceRefs(section.sources),
+      ]),
+      h('h2', {}, 'Passende Übungen fürs Training'),
+      h('p', { class: 'muted small' }, 'Vorschläge von Schnuffel, abgeleitet aus den Regeln oben. Sie stammen nicht aus einer Quelle.'),
+      h(
+        'ul',
+        { class: 'card rules', 'aria-label': 'Übungsvorschläge' },
+        EXERCISE_SUGGESTIONS.map((e) => h('li', {}, h('strong', {}, e.name), ' ', h('span', { class: 'muted' }, e.why))),
+      ),
+      h('a', { class: 'button', href: '#/training/neu' }, 'Training erfassen'),
+      h('h2', {}, 'Was nicht belegt ist'),
+      h('ul', { class: 'card rules' }, GAPS.map((gap) => h('li', {}, gap))),
+      h('h2', {}, 'Quellen'),
+      h(
+        'ul',
+        { class: 'card rules sources', 'aria-label': 'Quellen' },
+        SOURCES.map((s) =>
+          h('li', {}, h('a', { href: s.url, target: '_blank', rel: 'noopener' }, s.title), h('span', { class: 'muted' }, ` – ${s.publisher}, abgerufen am ${formatDate(s.retrieved)}`)),
+        ),
+      ),
+    ];
+  },
+
   async info(store) {
     const data = await store.load();
     const message = h('p', { class: 'message', role: 'status' });
@@ -221,7 +256,10 @@ function sessionItem(session) {
 async function sessionForm(store, session) {
   const message = h('p', { class: 'message', role: 'status' });
   const exerciseList = h('div', { class: 'exercises' });
-  const knownNames = [...new Set((await store.listSessions()).flatMap((s) => s.exercises.map((e) => e.name)))];
+  // Vorschläge: bereits verwendete Übungen zuerst, dann die Übungen aus dem Bereich Herdenschutz.
+  const knownNames = [
+    ...new Set([...(await store.listSessions()).flatMap((s) => s.exercises.map((e) => e.name)), ...EXERCISE_SUGGESTIONS.map((e) => e.name)]),
+  ];
 
   function renumber() {
     [...exerciseList.children].forEach((fs, i) => {
@@ -324,7 +362,7 @@ async function render() {
   const content = await views[route.name](store, route);
   // Wurde in der Zwischenzeit weiter navigiert, gilt die neuere Ansicht.
   if (current !== renderCount) return;
-  view.replaceChildren(...content);
+  view.replaceChildren(...content.flat(Infinity).filter((c) => c != null && c !== false));
   const tab = tabFor(route);
   for (const link of document.querySelectorAll('.tabbar a')) {
     if (link.dataset.route === tab) link.setAttribute('aria-current', 'page');

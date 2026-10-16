@@ -6,7 +6,7 @@ Diese Datei ist die Zielliste des Projekts. Sie wird bei jeder Etappe nachgefüh
 
 **Arbeitsweise:** Kleine Etappen mit Akzeptanzkriterien und Tests. Fachliche Inhalte (Ausbildung, Prüfungsordnungen CH/EU, Tierschutz, Trainingsmethoden) werden erst aufgenommen, wenn sie mit Quellen geprüft sind (Chain of Verification). Nicht Verifiziertes wird gekennzeichnet.
 
-Stand: 2026-10-16
+Stand: 2026-10-16 (Etappen 1 bis 5)
 
 ## Nächster Schritt
 
@@ -66,11 +66,35 @@ Entscheid von Jules (2026-10-16): Cloudflare Pages.
 - [ ] App unter der `*.pages.dev`-Adresse erreichbar und als PWA installierbar
 - [ ] Test der Installation und der Datensicherung auf Android und iPhone – macht Jules
 
+### ✅ Etappe 5: Herdenschutz
+
+Wunsch von Jules (2026-10-16): Thematik Herdenschutz aufnehmen. Umfang (Auswahlkarte, Standard «Verhalten + Training»): Verhaltensregeln bei Herdenschutzhunden und geschützten Herden, dazu Übungsvorschläge fürs Tagebuch.
+
+Akzeptanzkriterien:
+
+- [x] Eigener Bereich «Herdenschutz» in der Navigation, offline verfügbar (E2E-Test)
+- [x] Regeln in Abschnitten, jeder Abschnitt mit Quellenangabe; Quellen mit Link, Herausgeber und Abrufdatum (Unit- und E2E-Test)
+- [x] Link zur Karte der Einsatzgebiete von Herdenschutz Schweiz
+- [x] Übungsvorschläge, als Vorschlag von Schnuffel gekennzeichnet, erscheinen im Tagebuch als Tipphilfe (E2E-Test)
+- [x] Abschnitt «Was nicht belegt ist» mit den Lücken der Recherche
+
+Chain of Verification (16.10.2026):
+
+- Geprüft: Verhaltensempfehlungen von Herdenschutz Schweiz (AGRIDEA, Website) und Flyer «Arbeitende Herdenschutzhunde» (AGRIDEA 2021, über Schweizer Wanderwege). Beide stimmen inhaltlich überein. Zuständigkeiten und Rechtsgrundlagen (JSG/JSV seit 1.2.2025) laut BAFU-Seite vom 23.2.2026.
+- Nicht belegt: eigene offizielle Regeln für Jägerinnen und Jäger mit Jagdhund; kantonale Einschränkungen der Jagd mit Hund in Einsatzgebieten. Beides steht so in der App.
+- Die Übungsvorschläge sind keine Fachaussage, sondern aus den Regeln abgeleitet und in der App so gekennzeichnet.
+
 ### ⬜ Später: Fachinhalte (nur geprüft)
 
 - [ ] Übungskatalog nach Ausbildungsbereichen, mit Quellen
 - [ ] Bezug zu Prüfungsordnungen (welche, ist offen)
 - [ ] Mehrere Hunde
+
+## Annahmen (Etappe 5)
+
+- **Inhalte liegen als Daten in `src/content/herdenschutz.js`**, getrennt von der Darstellung, mit Quellen-IDs pro Abschnitt. So lassen sich weitere Fachthemen gleich aufbauen und prüfen.
+- **Externe Links** (Quellen, Karte) öffnen in einem neuen Fenster; die App selbst lädt weiterhin nichts von aussen.
+- **Fünf Menüpunkte** sind auf schmalen Handys noch lesbar («Herden­schutz» darf umbrechen). Bei weiteren Themen wird ein Menüpunkt «Wissen» mit Unterseiten sinnvoll.
 
 ## Annahmen (Etappe 4)
 
