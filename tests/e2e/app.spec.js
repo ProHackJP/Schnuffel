@@ -46,6 +46,7 @@ test('Eingaben werden als Text angezeigt, nicht als HTML', async ({ page }) => {
   await page.goto('/#/hund');
   await page.getByLabel('Name').fill('<img src=x onerror=alert(1)>');
   await page.getByRole('button', { name: 'Speichern' }).click();
+  await expect(page.getByRole('status')).toHaveText('<img src=x onerror=alert(1)> ist gespeichert.');
   await page.goto('/#/');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Hallo <img src=x onerror=alert(1)>!');
   await expect(page.locator('main img')).toHaveCount(0);
