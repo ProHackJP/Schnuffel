@@ -10,7 +10,7 @@ Stand: 2026-10-16 (Etappen 1 bis 6)
 
 ## Nächster Schritt
 
-Jules verbindet das Repository einmalig mit Cloudflare Pages (Anleitung im Projekt-Thread) und probiert die App auf dem Handy aus. Danach: Rückmeldungen aus der Praxis einarbeiten, dann Fachinhalte planen.
+Jules führt den PR mit der Datei `wrangler.jsonc` zusammen. Dann baut und veröffentlicht Cloudflare die App automatisch. Danach probiert Jules sie auf dem Handy aus. Danach: Rückmeldungen aus der Praxis einarbeiten, dann Fachinhalte planen.
 
 ## Etappen
 
@@ -56,14 +56,16 @@ Akzeptanzkriterien:
 - [x] Unbrauchbare oder zu neue Dateien werden mit verständlicher Meldung abgelehnt (Unit- und E2E-Test)
 - [x] Hinweis auf der Startseite, wenn Einheiten vorhanden sind und seit über 30 Tagen (oder noch nie) gesichert wurde (Unit- und E2E-Test)
 
-### 🔶 Etappe 4: Veröffentlichung (Cloudflare Pages)
+### 🔶 Etappe 4: Veröffentlichung (Cloudflare)
 
-Entscheid von Jules (2026-10-16): Cloudflare Pages.
+Entscheid von Jules (2026-10-16): Cloudflare. Jules hat in Cloudflare ein Worker-Projekt «schnuffel» mit Git-Anbindung an `ProHackJP/Schnuffel` angelegt (nicht ein Pages-Projekt). Das ist gleichwertig: Cloudflare liefert den Ordner `dist` als statische Dateien aus und baut bei jedem Push auf `main`. Dafür braucht es `wrangler.jsonc` im Repository.
 
 - [x] Build-Schritt `npm run build` kopiert nur die App-Dateien nach `dist/` (Unit-Test prüft Inhalt)
 - [x] `_headers` mit Sicherheits-Headern (CSP, kein Framing) und `Cache-Control: no-cache` für `sw.js`; der Entwicklungsserver wendet dieselben Regeln an, alle Browser-Tests laufen damit
-- [ ] Repository in Cloudflare Pages verbunden (Build: `npm run build`, Ausgabe: `dist`, Produktionszweig: `main`) – macht Jules
-- [ ] App unter der `*.pages.dev`-Adresse erreichbar und als PWA installierbar
+- [x] Repository in Cloudflare verbunden (Worker «schnuffel», Git-Anbindung an `ProHackJP/Schnuffel`) – Jules, Stand Screenshot 2026-10-16 14:39
+- [x] `wrangler.jsonc` (Name `schnuffel`, Ausgabe `dist`), Trockenlauf von Wrangler bestanden, Unit-Test prüft Name und Ausgabeordner
+- [ ] Erster automatischer Build auf `main` erfolgreich
+- [ ] App unter der `*.workers.dev`-Adresse erreichbar und als PWA installierbar
 - [ ] Test der Installation und der Datensicherung auf Android und iPhone – macht Jules
 
 ### ✅ Etappe 5: Herdenschutz
@@ -126,7 +128,7 @@ Chain of Verification (16.10.2026):
 
 ## Annahmen (Etappe 4)
 
-- **Cloudflare Pages mit Git-Anbindung** statt Upload über GitHub Actions: kein API-Token nötig, jeder Push auf `main` wird automatisch veröffentlicht, jeder andere Zweig bekommt eine Vorschau-Adresse.
+- **Cloudflare mit Git-Anbindung** statt Upload über GitHub Actions: kein API-Token nötig, jeder Push auf `main` wird automatisch veröffentlicht. Jules' Projekt ist ein Worker mit statischen Dateien statt Pages; die Cloudflare-Doku empfiehlt Workers inzwischen auch für neue statische Seiten. Gleiches Ergebnis, andere Adresse (`*.workers.dev`).
 - **Content-Security-Policy** erlaubt nur eigene Dateien. Wird später etwas Externes gebraucht (z. B. Karten), muss die Regel in `_headers` erweitert werden.
 - **Vorgehen laut Cloudflare-Doku** (Stand 15.10.2026): Workers & Pages → Create application → Pages → Import an existing Git repository. Die Oberfläche kann sich ändern.
 
@@ -158,7 +160,7 @@ Chain of Verification (16.10.2026):
 
 - Welche Rassen und welche Prüfungen (z. B. Schweizer oder deutsche Ordnungen) stehen im Fokus?
 - Soll die Bewertung 1 bis 5 eine festgelegte Bedeutung bekommen (z. B. angelehnt an ein Prüfungsschema)?
-- Soll die App später eine eigene Domain bekommen (statt `*.pages.dev`)?
+- Soll die App später eine eigene Domain bekommen (statt `*.workers.dev`)?
 
 ## Bekannte Grenzen
 

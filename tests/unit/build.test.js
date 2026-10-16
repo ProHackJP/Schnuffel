@@ -21,3 +21,13 @@ test('sw.js im Build wird nicht gecacht', async () => {
   const headers = await readFile(new URL('_headers', dist), 'utf8');
   assert.match(headers, /\/sw\.js\n\s+Cache-Control: no-cache/);
 });
+
+// Cloudflare veröffentlicht den Ordner dist über Workers Builds. Der Name muss zum Worker im Cloudflare-Konto passen,
+// sonst schlägt der Build dort fehl.
+test('wrangler.jsonc verweist auf den Build-Ordner und den Worker «schnuffel»', async () => {
+  const config = JSON.parse(await readFile(new URL('../../wrangler.jsonc', import.meta.url), 'utf8'));
+  assert.equal(config.name, 'schnuffel');
+  assert.equal(config.assets.directory, './dist');
+  assert.equal(config.main, undefined, 'reine statische Seite, kein Worker-Code');
+  assert.match(config.compatibility_date, /^\d{4}-\d{2}-\d{2}$/);
+});
