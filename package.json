@@ -1,0 +1,20 @@
+{
+  "name": "schnuffel",
+  "version": "0.5.0",
+  "private": true,
+  "description": "Trainings-App für Jagdhunde als installierbare, offline-fähige Web-App (PWA).",
+  "type": "module",
+  "scripts": {
+    "start": "node scripts/serve.mjs",
+    "build": "node scripts/build.mjs",
+    "test": "npm run test:unit && npm run test:e2e",
+    "test:unit": "node --test tests/unit/*.test.js",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.56.1"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
