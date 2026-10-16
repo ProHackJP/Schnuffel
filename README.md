@@ -4,6 +4,8 @@ Trainings-App für Jagdhunde. Läuft als Web-App (PWA): im Browser öffnen, aufs
 
 Aktueller Stand, Etappen und Annahmen: siehe [STATUS.md](STATUS.md).
 
+Veröffentlicht unter https://schnuffel.julian90-fca.workers.dev.
+
 ## Lokal starten
 
 Voraussetzung: [Node.js](https://nodejs.org) ab Version 20.
