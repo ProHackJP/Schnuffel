@@ -32,7 +32,8 @@ Für die Browser-Tests einmalig `npx playwright install chromium` ausführen.
 | `index.html` | Seitengerüst mit Navigation |
 | `src/app.js` | Ansichten und Ablauf |
 | `src/router.js` | Navigation über `#/pfad` |
-| `src/store.js` | Lokale Datenablage |
+| `src/store.js` | Datenlogik: Hund und Trainingseinheiten, Validierung |
+| `src/storage.js` | Speicher-Backends (IndexedDB, localStorage, Speicher für Tests) |
 | `sw.js` | Service Worker für den Offline-Betrieb |
 | `manifest.webmanifest` | Angaben für die Installation aufs Handy |
 | `scripts/serve.mjs` | Kleiner Webserver für Entwicklung und Tests |
