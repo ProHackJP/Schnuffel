@@ -6,11 +6,11 @@ Diese Datei ist die Zielliste des Projekts. Sie wird bei jeder Etappe nachgefüh
 
 **Arbeitsweise:** Kleine Etappen mit Akzeptanzkriterien und Tests. Fachliche Inhalte (Ausbildung, Prüfungsordnungen CH/EU, Tierschutz, Trainingsmethoden) werden erst aufgenommen, wenn sie mit Quellen geprüft sind (Chain of Verification). Nicht Verifiziertes wird gekennzeichnet.
 
-Stand: 2026-10-16 (Etappen 1 bis 6)
+Stand: 2026-10-16 (Etappen 1 bis 6, App veröffentlicht)
 
 ## Nächster Schritt
 
-Jules führt den PR mit der Datei `wrangler.jsonc` zusammen. Dann baut und veröffentlicht Cloudflare die App automatisch. Danach probiert Jules sie auf dem Handy aus. Danach: Rückmeldungen aus der Praxis einarbeiten, dann Fachinhalte planen.
+Die App ist unter https://schnuffel.julian90-fca.workers.dev veröffentlicht. Jules installiert sie auf dem Handy und probiert Offline-Betrieb und Datensicherung aus (Anleitung im Projekt-Thread). Danach: Rückmeldungen aus der Praxis einarbeiten, dann Fachinhalte planen. Danach: Rückmeldungen aus der Praxis einarbeiten, dann Fachinhalte planen.
 
 ## Etappen
 
@@ -64,9 +64,9 @@ Entscheid von Jules (2026-10-16): Cloudflare. Jules hat in Cloudflare ein Worker
 - [x] `_headers` mit Sicherheits-Headern (CSP, kein Framing) und `Cache-Control: no-cache` für `sw.js`; der Entwicklungsserver wendet dieselben Regeln an, alle Browser-Tests laufen damit
 - [x] Repository in Cloudflare verbunden (Worker «schnuffel», Git-Anbindung an `ProHackJP/Schnuffel`) – Jules, Stand Screenshot 2026-10-16 14:39
 - [x] `wrangler.jsonc` (Name `schnuffel`, Ausgabe `dist`), Trockenlauf von Wrangler bestanden, Unit-Test prüft Name und Ausgabeordner
-- [ ] Erster automatischer Build auf `main` erfolgreich
-- [ ] App unter der `*.workers.dev`-Adresse erreichbar und als PWA installierbar
-- [ ] Test der Installation und der Datensicherung auf Android und iPhone – macht Jules
+- [x] Erster automatischer Build auf `main` erfolgreich (Workers Builds, 2026-10-16 14:55 UTC)
+- [x] App unter https://schnuffel.julian90-fca.workers.dev erreichbar. Geprüft per Abruf: Startseite, `sw.js` (Cache-Version v5 mit Ausbildungsplan), Manifest und Ausbildungsdaten werden ausgeliefert. Nicht geprüft: die Header aus `_headers` (CSP, kein Framing, `sw.js` ohne Cache), da der Abruf keine Header zeigt.
+- [ ] Test der Installation als PWA, des Offline-Betriebs und der Datensicherung auf Android und iPhone – macht Jules
 
 ### ✅ Etappe 5: Herdenschutz
 
