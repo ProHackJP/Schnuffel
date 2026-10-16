@@ -1,0 +1,12 @@
+# Header-Regeln für Cloudflare Pages (werden beim Build nach dist/ kopiert).
+
+# Der Service Worker darf nie aus dem Browser-Cache kommen, sonst sehen Nutzer alte Versionen.
+/sw.js
+  Cache-Control: no-cache
+
+# Grundschutz für alle Antworten. Die App lädt nur eigene Dateien.
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  Content-Security-Policy: default-src 'self'; img-src 'self' blob: data:; style-src 'self'; script-src 'self'; manifest-src 'self'; worker-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'
