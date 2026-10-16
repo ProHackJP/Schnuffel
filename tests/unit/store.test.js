@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createStore, migrate, normalizeDog, normalizeSession, sortSessions, DATA_KEY } from '../../src/store.js';
+import { createStore, migrate, normalizeDog, normalizeSession, sortSessions, DATA_KEY, SCHEMA_VERSION } from '../../src/store.js';
 import { memoryBackend } from '../../src/storage.js';
 
 const exercise = { name: 'Schleppe', game: 'Kaninchen', rating: '4', notes: '' };
@@ -45,8 +45,9 @@ test('kaputte Daten im Speicher führen nicht zum Absturz', async () => {
 test('Daten aus Etappe 1 (ohne Einheiten) werden übernommen', () => {
   const old = { version: 1, dogs: [{ id: 'a', name: 'Arko' }] };
   const data = migrate(old);
-  assert.equal(data.version, 2);
+  assert.equal(data.version, SCHEMA_VERSION);
   assert.deepEqual(data.sessions, []);
+  assert.deepEqual(data.meta, {});
   assert.equal(data.dogs[0].name, 'Arko');
 });
 

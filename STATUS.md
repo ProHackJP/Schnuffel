@@ -10,7 +10,7 @@ Stand: 2026-10-16
 
 ## Nächster Schritt
 
-Etappe 3: Export und Import der Daten, damit nichts verloren geht und ein Gerätewechsel möglich ist.
+Etappe 4: Veröffentlichung über GitHub Pages, damit Jules die App auf dem Handy installieren und ausprobieren kann. Dafür braucht es einen Entscheid von Jules zum Hosting (siehe offene Fragen).
 
 ## Etappen
 
@@ -44,10 +44,17 @@ Akzeptanzkriterien:
 - [x] Erfassen funktioniert offline (E2E-Test)
 - [x] Prüfung, dass alle App-Dateien in der Offline-Liste des Service Workers stehen (Unit-Test)
 
-### ⬜ Etappe 3: Datensicherung
+### ✅ Etappe 3: Datensicherung
 
-- [ ] Export aller Daten als Datei und Import auf einem anderen Gerät
-- [ ] Hinweis, wenn lange keine Sicherung gemacht wurde
+Ziel: Daten als Datei sichern und auf einem anderen Gerät wiederherstellen, damit bei Gerätewechsel oder gelöschten Browserdaten nichts verloren geht.
+
+Akzeptanzkriterien:
+
+- [x] Export aller Daten als JSON-Datei über die Info-Seite (Unit- und E2E-Test)
+- [x] Import einer Sicherungsdatei ersetzt die Daten nach Rückfrage (Unit- und E2E-Test mit zweitem Browser-Kontext)
+- [x] Abbruch der Rückfrage lässt die Daten unverändert (E2E-Test)
+- [x] Unbrauchbare oder zu neue Dateien werden mit verständlicher Meldung abgelehnt (Unit- und E2E-Test)
+- [x] Hinweis auf der Startseite, wenn Einheiten vorhanden sind und seit über 30 Tagen (oder noch nie) gesichert wurde (Unit- und E2E-Test)
 
 ### ⬜ Etappe 4: Veröffentlichung
 
@@ -59,6 +66,13 @@ Akzeptanzkriterien:
 - [ ] Übungskatalog nach Ausbildungsbereichen, mit Quellen
 - [ ] Bezug zu Prüfungsordnungen (welche, ist offen)
 - [ ] Mehrere Hunde
+
+## Annahmen (Etappe 3)
+
+- **Import ersetzt alles.** Ein Zusammenführen zweier Datenstände wäre fehleranfällig und ist für ein Gerät mit einem Hund nicht nötig. Vor dem Ersetzen fragt die App nach.
+- **Sicherungsformat:** JSON mit Kennung `schnuffel-backup` und Versionsnummer. Beim Import werden alle Felder geprüft und bereinigt, unbekannte Felder verworfen. Dateien aus neueren App-Versionen werden abgelehnt, ältere werden migriert.
+- **Erinnerung nach 30 Tagen.** Zeitpunkt der letzten Sicherung wird in den Daten selbst gespeichert und beim Import übernommen.
+- **Speichern der Datei** läuft über den Browser-Download. Auf dem Handy landet die Datei im Download-Ordner oder wird zum Teilen angeboten (je nach Browser). Nicht auf echten Geräten geprüft, das gehört zu Etappe 4.
 
 ## Annahmen (Etappe 2)
 
@@ -85,4 +99,4 @@ Akzeptanzkriterien:
 
 ## Bekannte Grenzen
 
-- Browser können lokale Daten löschen, z. B. wenn Speicher knapp ist oder Safari die Seite länger nicht gesehen hat. Die App bittet um dauerhaften Speicher, das wird aber nicht überall gewährt. Darum ist Etappe 3 (Export) wichtig.
+- Browser können lokale Daten löschen, z. B. wenn Speicher knapp ist oder Safari die Seite länger nicht gesehen hat. Die App bittet um dauerhaften Speicher, das wird aber nicht überall gewährt. Darum regelmässig sichern (Etappe 3).

@@ -1,8 +1,8 @@
 import { parseHash, tabFor } from './router.js';
-import { createStore, DATA_KEY, RATINGS } from './store.js';
+import { createStore, parseBackup, DATA_KEY, RATINGS, BACKUP_REMINDER_DAYS } from './store.js';
 import { openBrowserBackend } from './storage.js';
 
-export const APP_VERSION = '0.2.0';
+export const APP_VERSION = '0.3.0';
 
 // Nur Vorschläge zur schnelleren Eingabe, jede andere Angabe ist ebenfalls möglich.
 const GAME_SUGGESTIONS = ['Reh', 'Rothirsch', 'Gämse', 'Wildschwein', 'Fuchs', 'Feldhase', 'Kaninchen', 'Fasan', 'Rebhuhn', 'Stockente', 'Taube'];
@@ -39,19 +39,42 @@ function formatDate(iso) {
   return new Intl.DateTimeFormat('de-CH', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date(y, m - 1, d));
 }
 
+function formatDateTime(date) {
+  return new Intl.DateTimeFormat('de-CH', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }).format(date);
+}
+
 function ratingText(rating) {
   return rating ? `${rating}/5` : null;
+}
+
+// Bietet ein Objekt als JSON-Datei zum Speichern an.
+function downloadJson(data, filename) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = h('a', { href: url, download: filename });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 const views = {
   async start(store) {
     const dog = await store.getDog();
+    const backupDue = await store.backupDue();
     return [
       h('h1', {}, dog ? `Hallo ${dog.name}!` : 'Willkommen bei Schnuffel'),
       h('p', {}, 'Schnuffel begleitet dich im Training mit deinem Jagdhund. Alle Daten bleiben auf deinem Gerät, die App funktioniert auch ohne Empfang.'),
       dog
         ? h('a', { class: 'button', href: '#/training/neu' }, 'Training erfassen')
         : h('a', { class: 'button', href: '#/hund' }, 'Hund erfassen'),
+      backupDue &&
+        h(
+          'p',
+          { class: 'card notice', role: 'note' },
+          `Deine Trainingsdaten wurden seit über ${BACKUP_REMINDER_DAYS} Tagen nicht gesichert. `,
+          h('a', { href: '#/info' }, 'Jetzt sichern'),
+        ),
     ];
   },
 
@@ -116,12 +139,60 @@ const views = {
     return [h('h1', {}, 'Einheit bearbeiten'), await sessionForm(store, session)];
   },
 
-  async info() {
+  async info(store) {
+    const data = await store.load();
+    const message = h('p', { class: 'message', role: 'status' });
+    const lastExport = data.meta.lastExportAt ? new Date(data.meta.lastExportAt) : null;
+    const lastExportEl = h('p', { class: 'muted' }, lastExport ? `Letzte Sicherung: ${formatDateTime(lastExport)}` : 'Noch keine Sicherung gemacht.');
+    const fileInput = h('input', {
+      id: 'restore-file',
+      type: 'file',
+      accept: 'application/json,.json',
+      onchange: async () => {
+        const file = fileInput.files[0];
+        if (!file) return;
+        try {
+          // Zuerst prüfen, dann nachfragen: bei einer unbrauchbaren Datei kommt direkt die Fehlermeldung.
+          const text = await file.text();
+          parseBackup(text);
+          if (!confirm('Alle Daten auf diesem Gerät werden durch die Sicherung ersetzt. Fortfahren?')) return;
+          const result = await store.importBackup(text);
+          showMessage(message, 'ok', `Wiederhergestellt: ${result.dogs} Hund, ${result.sessions} Einheiten.`);
+          render();
+        } catch (error) {
+          showMessage(message, 'error', error.message);
+        } finally {
+          fileInput.value = '';
+        }
+      },
+    });
     return [
       h('h1', {}, 'Info'),
       h('p', {}, `Version ${APP_VERSION}`),
-      h('p', {}, 'Deine Daten werden nur lokal in diesem Browser gespeichert. Wenn du die Browserdaten löschst, sind sie weg.'),
       h('p', { id: 'sw-status' }, 'Offline-Modus: wird geprüft …'),
+      h('h2', {}, 'Datensicherung'),
+      h('p', {}, 'Deine Daten werden nur lokal in diesem Browser gespeichert. Sichere sie regelmässig als Datei, zum Beispiel in deiner Cloud. Mit der Datei kannst du die Daten auf einem anderen Gerät wiederherstellen.'),
+      lastExportEl,
+      h(
+        'button',
+        {
+          type: 'button',
+          onclick: async () => {
+            try {
+              const backup = await store.exportBackup();
+              downloadJson(backup, `schnuffel-sicherung-${backup.exportedAt.slice(0, 10)}.json`);
+              showMessage(message, 'ok', 'Sicherung erstellt.');
+              lastExportEl.textContent = `Letzte Sicherung: ${formatDateTime(new Date(backup.exportedAt))}`;
+            } catch (error) {
+              showMessage(message, 'error', error.message);
+            }
+          },
+        },
+        'Daten sichern',
+      ),
+      h('label', { for: 'restore-file' }, 'Wiederherstellen aus Sicherungsdatei'),
+      fileInput,
+      message,
     ];
   },
 };

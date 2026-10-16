@@ -2,12 +2,16 @@
 // Wo die Daten liegen, entscheidet das übergebene Backend (siehe storage.js). So lässt sich die Logik ohne Browser testen.
 
 export const DATA_KEY = 'schnuffel:v1';
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 3;
+export const EXPORT_FORMAT = 'schnuffel-backup';
 
 export const RATINGS = [1, 2, 3, 4, 5];
 
+// Nach so vielen Tagen ohne Sicherung wird auf der Startseite daran erinnert.
+export const BACKUP_REMINDER_DAYS = 30;
+
 export function emptyData() {
-  return { version: SCHEMA_VERSION, dogs: [], sessions: [] };
+  return { version: SCHEMA_VERSION, dogs: [], sessions: [], meta: {} };
 }
 
 // Bringt gespeicherte Daten älterer Versionen auf den aktuellen Stand.
@@ -15,8 +19,63 @@ export function migrate(data) {
   if (!data || typeof data !== 'object' || !Array.isArray(data.dogs)) return emptyData();
   const migrated = { ...data };
   if (!Array.isArray(migrated.sessions)) migrated.sessions = [];
+  if (!migrated.meta || typeof migrated.meta !== 'object') migrated.meta = {};
   migrated.version = SCHEMA_VERSION;
   return migrated;
+}
+
+// Ob an eine Sicherung erinnert werden soll: nur wenn es Einheiten gibt und die letzte Sicherung fehlt oder alt ist.
+export function backupDue(data, now = new Date()) {
+  if (data.sessions.length === 0) return false;
+  const last = data.meta.lastExportAt ? Date.parse(data.meta.lastExportAt) : NaN;
+  if (Number.isNaN(last)) return true;
+  return now.getTime() - last > BACKUP_REMINDER_DAYS * 24 * 60 * 60 * 1000;
+}
+
+// Prüft eine Sicherungsdatei und liefert bereinigte Daten. Wirft bei unbrauchbarem Inhalt einen verständlichen Fehler.
+export function parseBackup(raw) {
+  let parsed = raw;
+  if (typeof raw === 'string') {
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      throw new Error('Die Datei ist keine gültige Schnuffel-Sicherung.');
+    }
+  }
+  if (!parsed || typeof parsed !== 'object' || parsed.format !== EXPORT_FORMAT || !Array.isArray(parsed.dogs)) {
+    throw new Error('Die Datei ist keine gültige Schnuffel-Sicherung.');
+  }
+  if (typeof parsed.version !== 'number' || parsed.version > SCHEMA_VERSION) {
+    throw new Error('Die Sicherung stammt aus einer neueren Version von Schnuffel. Bitte zuerst die App aktualisieren.');
+  }
+  const data = migrate(parsed);
+  const dogs = data.dogs.map((dog, i) => {
+    try {
+      return { ...normalizeDog(dog), id: idOrNew(dog?.id), updatedAt: isoOrNow(dog?.updatedAt) };
+    } catch (error) {
+      throw new Error(`Hund ${i + 1} in der Sicherung ist fehlerhaft: ${error.message}`);
+    }
+  });
+  const dogIds = new Set(dogs.map((d) => d.id));
+  const sessions = data.sessions.map((session, i) => {
+    try {
+      const fields = normalizeSession(session);
+      const dogId = dogIds.has(session?.dogId) ? session.dogId : dogs[0]?.id;
+      if (!dogId) throw new Error('kein Hund vorhanden.');
+      return { id: idOrNew(session?.id), dogId, ...fields, createdAt: isoOrNow(session?.createdAt), updatedAt: isoOrNow(session?.updatedAt) };
+    } catch (error) {
+      throw new Error(`Einheit ${i + 1} in der Sicherung ist fehlerhaft: ${error.message}`);
+    }
+  });
+  return { ...emptyData(), dogs, sessions, meta: { lastExportAt: data.meta.lastExportAt ?? null } };
+}
+
+function idOrNew(id) {
+  return typeof id === 'string' && /^[A-Za-z0-9-]{1,64}$/.test(id) ? id : newId();
+}
+
+function isoOrNow(value) {
+  return typeof value === 'string' && !Number.isNaN(Date.parse(value)) ? value : new Date().toISOString();
 }
 
 export function createStore(backend) {
@@ -82,6 +141,25 @@ export function createStore(backend) {
       if (data.sessions.length === before) return false;
       await save(data);
       return true;
+    },
+
+    // Liefert alle Daten als Sicherung und merkt sich den Zeitpunkt.
+    async exportBackup(now = new Date()) {
+      const data = await load();
+      data.meta.lastExportAt = now.toISOString();
+      await save(data);
+      return { format: EXPORT_FORMAT, version: SCHEMA_VERSION, exportedAt: data.meta.lastExportAt, dogs: data.dogs, sessions: data.sessions, meta: data.meta };
+    },
+
+    // Ersetzt alle Daten durch den Inhalt einer Sicherung.
+    async importBackup(raw) {
+      const data = parseBackup(raw);
+      await save(data);
+      return { dogs: data.dogs.length, sessions: data.sessions.length };
+    },
+
+    async backupDue(now) {
+      return backupDue(await load(), now);
     },
 
     async clear() {

@@ -96,6 +96,7 @@ form.card {
 }
 
 label {
+  display: block;
   font-weight: 600;
   margin-top: 8px;
 }
@@ -261,4 +262,19 @@ a.session {
   color: var(--accent-text);
   font-size: 0.85rem;
   font-weight: 600;
+}
+
+h2 {
+  font-size: 1.15rem;
+  margin: 24px 0 8px;
+}
+
+.notice {
+  margin-top: 16px;
+  border-color: var(--accent);
+}
+
+input[type='file'] {
+  padding: 8px;
+  margin-top: 6px;
 }
