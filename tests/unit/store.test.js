@@ -26,12 +26,97 @@ test('Hund speichern und wieder laden', async () => {
   assert.deepEqual([loaded.name, loaded.breed, loaded.birthDate], ['Arko', 'Deutsch Drahthaar', '2024-03-01']);
 });
 
-test('erneutes Speichern des Hundes behält die ID', async () => {
+test('Speichern mit ID ändert den Hund und behält die ID', async () => {
   const store = createStore(memoryBackend());
   const first = await store.saveDog({ name: 'Arko' });
-  const second = await store.saveDog({ name: 'Arko II' });
+  const second = await store.saveDog({ id: first.id, name: 'Arko II', breed: 'Kleiner Münsterländer' });
   assert.equal(second.id, first.id);
+  assert.equal(second.breed, 'Kleiner Münsterländer');
   assert.equal((await store.load()).dogs.length, 1);
+  await assert.rejects(store.saveDog({ id: 'gibts-nicht', name: 'X' }), /existiert nicht/);
+});
+
+test('Speichern ohne ID legt einen weiteren Hund an und macht ihn zum aktiven Hund', async () => {
+  const store = createStore(memoryBackend());
+  const first = await store.saveDog({ name: 'Arko' });
+  const second = await store.saveDog({ name: 'Bella' });
+  assert.notEqual(second.id, first.id);
+  assert.deepEqual((await store.listDogs()).map((d) => d.name), ['Arko', 'Bella']);
+  assert.equal((await store.getDog()).id, second.id);
+});
+
+test('aktiven Hund wechseln, unbekannter Hund wird abgelehnt', async () => {
+  const store = createStore(memoryBackend());
+  const first = await store.saveDog({ name: 'Arko' });
+  await store.saveDog({ name: 'Bella' });
+  assert.equal((await store.setActiveDog(first.id)).name, 'Arko');
+  assert.equal((await store.getDog()).name, 'Arko');
+  await assert.rejects(store.setActiveDog('gibts-nicht'), /existiert nicht/);
+  assert.equal((await store.getDog()).name, 'Arko');
+});
+
+test('Einheiten gehören zum jeweiligen Hund', async () => {
+  const store = createStore(memoryBackend());
+  const arko = await store.saveDog({ name: 'Arko' });
+  const bella = await store.saveDog({ name: 'Bella' });
+  const forBella = await store.saveSession({ date: '2026-10-01', exercises: [exercise] });
+  await store.setActiveDog(arko.id);
+  const forArko = await store.saveSession({ date: '2026-10-02', exercises: [exercise] });
+  const explicit = await store.saveSession({ date: '2026-10-03', exercises: [exercise], dogId: bella.id });
+  assert.equal(forBella.dogId, bella.id);
+  assert.equal(forArko.dogId, arko.id);
+  assert.equal(explicit.dogId, bella.id);
+  assert.deepEqual((await store.listSessions(arko.id)).map((s) => s.id), [forArko.id]);
+  assert.equal((await store.listSessions(bella.id)).length, 2);
+  assert.equal((await store.listSessions()).length, 3);
+  // Beim Bearbeiten bleibt der Hund der Einheit.
+  const edited = await store.saveSession({ id: forBella.id, date: '2026-10-05', exercises: [exercise] });
+  assert.equal(edited.dogId, bella.id);
+});
+
+test('Hund löschen entfernt Einheiten und Planfortschritt, der andere Hund bleibt', async () => {
+  const store = createStore(memoryBackend());
+  const arko = await store.saveDog({ name: 'Arko' });
+  const bella = await store.saveDog({ name: 'Bella' });
+  await store.saveSession({ date: '2026-10-01', exercises: [exercise] });
+  await store.setStepStatus({ dogId: bella.id, planId: 'plan', stepId: 'schritt', status: 'done' });
+  await store.setStepStatus({ dogId: arko.id, planId: 'plan', stepId: 'schritt', status: 'doing' });
+  assert.deepEqual(await store.deleteDog(bella.id), { removedSessions: 1 });
+  assert.equal(await store.deleteDog(bella.id), null);
+  assert.deepEqual((await store.listDogs()).map((d) => d.name), ['Arko']);
+  assert.equal((await store.getDog()).id, arko.id);
+  assert.deepEqual(await store.listSessions(), []);
+  assert.deepEqual(await store.getProgress(bella.id), {});
+  assert.equal((await store.getProgress(arko.id)).plan.schritt.status, 'doing');
+});
+
+test('Planfortschritt: setzen, ändern, auf offen zurücksetzen, je Hund getrennt', async () => {
+  const store = createStore(memoryBackend());
+  const arko = await store.saveDog({ name: 'Arko' });
+  const bella = await store.saveDog({ name: 'Bella' });
+  assert.deepEqual(await store.getProgress(arko.id), {});
+  await store.setStepStatus({ dogId: arko.id, planId: 'plan-a', stepId: 'eins', status: 'doing' });
+  await store.setStepStatus({ dogId: arko.id, planId: 'plan-a', stepId: 'eins', status: 'done' });
+  await store.setStepStatus({ dogId: arko.id, planId: 'plan-a', stepId: 'zwei', status: 'doing' });
+  const progress = await store.getProgress(arko.id);
+  assert.equal(progress['plan-a'].eins.status, 'done');
+  assert.ok(progress['plan-a'].eins.updatedAt);
+  assert.equal(progress['plan-a'].zwei.status, 'doing');
+  assert.equal((await store.load()).planProgress.length, 2);
+  assert.deepEqual(await store.getProgress(bella.id), {});
+  await store.setStepStatus({ dogId: arko.id, planId: 'plan-a', stepId: 'zwei', status: 'open' });
+  assert.equal((await store.getProgress(arko.id))['plan-a'].zwei, undefined);
+});
+
+test('Planfortschritt: ungültige Angaben werden abgelehnt', async () => {
+  const store = createStore(memoryBackend());
+  const arko = await store.saveDog({ name: 'Arko' });
+  const ok = { dogId: arko.id, planId: 'plan', stepId: 'schritt', status: 'done' };
+  await assert.rejects(store.setStepStatus({ ...ok, status: 'fertig' }), /Status/);
+  await assert.rejects(store.setStepStatus({ ...ok, planId: '../x' }), /Kennung/);
+  await assert.rejects(store.setStepStatus({ ...ok, stepId: '', status: 'open' }), /Kennung/);
+  await assert.rejects(store.setStepStatus({ ...ok, dogId: 'gibts-nicht' }), /existiert nicht/);
+  assert.equal((await store.load()).planProgress.length, 0);
 });
 
 test('kaputte Daten im Speicher führen nicht zum Absturz', async () => {
@@ -47,6 +132,7 @@ test('Daten aus Etappe 1 (ohne Einheiten) werden übernommen', () => {
   const data = migrate(old);
   assert.equal(data.version, SCHEMA_VERSION);
   assert.deepEqual(data.sessions, []);
+  assert.deepEqual(data.planProgress, []);
   assert.deepEqual(data.meta, {});
   assert.equal(data.dogs[0].name, 'Arko');
 });

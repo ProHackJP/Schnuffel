@@ -4,7 +4,7 @@ test('Startseite lädt mit Navigation', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Willkommen bei Schnuffel');
   const nav = page.getByRole('navigation', { name: 'Hauptnavigation' });
-  for (const label of ['Start', 'Hund', 'Training', 'Info']) {
+  for (const label of ['Start', 'Hund', 'Training', 'Pläne', 'Herdenschutz', 'Info']) {
     await expect(nav.getByRole('link', { name: label })).toBeVisible();
   }
 });
@@ -37,7 +37,15 @@ test('Hund erfassen, speichern und nach Neuladen wiederfinden', async ({ page })
   await expect(page.getByRole('status')).toHaveText('Arko ist gespeichert.');
 
   await page.reload();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Mein Hund');
+  const dog = page.getByRole('list', { name: 'Hunde' }).getByRole('listitem');
+  await expect(dog).toHaveCount(1);
+  await expect(dog).toContainText('Arko');
+  await expect(dog).toContainText('Deutsch Drahthaar');
+  await expect(dog).toContainText('Aktiv');
+  await dog.getByRole('link', { name: 'Arko bearbeiten' }).click();
   await expect(page.getByLabel('Name')).toHaveValue('Arko');
+  await expect(page.getByLabel('Rasse (optional)')).toHaveValue('Deutsch Drahthaar');
   await page.getByRole('navigation').getByRole('link', { name: 'Start' }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Hallo Arko!');
 });

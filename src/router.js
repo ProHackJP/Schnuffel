@@ -4,8 +4,10 @@
 const STATIC = {
   '/': 'start',
   '/hund': 'hund',
+  '/hund/neu': 'hund-neu',
   '/training': 'training',
   '/training/neu': 'training-neu',
+  '/plaene': 'plaene',
   '/herdenschutz': 'herdenschutz',
   '/herdenschutz/ausbildung': 'herdenschutz-ausbildung',
   '/info': 'info',
@@ -16,8 +18,12 @@ export function parseHash(hash) {
   if (!path.startsWith('/')) path = `/${path}`;
   if (path.length > 1) path = path.replace(/\/+$/, '');
   if (STATIC[path]) return { name: STATIC[path], id: null };
-  const match = /^\/training\/([A-Za-z0-9-]{1,64})$/.exec(path);
-  if (match) return { name: 'training-edit', id: match[1] };
+  const dog = /^\/hund\/([A-Za-z0-9-]{1,64})$/.exec(path);
+  if (dog) return { name: 'hund-edit', id: dog[1] };
+  const session = /^\/training\/([A-Za-z0-9-]{1,64})$/.exec(path);
+  if (session) return { name: 'training-edit', id: session[1] };
+  const plan = /^\/plaene\/([a-z0-9-]{1,64})$/.exec(path);
+  if (plan) return { name: 'plaene-plan', id: plan[1] };
   return null;
 }
 

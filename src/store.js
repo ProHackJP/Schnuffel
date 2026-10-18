@@ -2,16 +2,21 @@
 // Wo die Daten liegen, entscheidet das übergebene Backend (siehe storage.js). So lässt sich die Logik ohne Browser testen.
 
 export const DATA_KEY = 'schnuffel:v1';
-export const SCHEMA_VERSION = 3;
+export const SCHEMA_VERSION = 4;
 export const EXPORT_FORMAT = 'schnuffel-backup';
 
 export const RATINGS = [1, 2, 3, 4, 5];
+
+// Fortschritt eines Schrittes im Trainingsplan. «Offen» ist der Normalzustand und wird nicht gespeichert.
+export const STEP_STATUSES = ['doing', 'done'];
+
+const ID_PATTERN = /^[A-Za-z0-9-]{1,64}$/;
 
 // Nach so vielen Tagen ohne Sicherung wird auf der Startseite daran erinnert.
 export const BACKUP_REMINDER_DAYS = 30;
 
 export function emptyData() {
-  return { version: SCHEMA_VERSION, dogs: [], sessions: [], meta: {} };
+  return { version: SCHEMA_VERSION, dogs: [], sessions: [], planProgress: [], meta: {} };
 }
 
 // Bringt gespeicherte Daten älterer Versionen auf den aktuellen Stand.
@@ -19,14 +24,20 @@ export function migrate(data) {
   if (!data || typeof data !== 'object' || !Array.isArray(data.dogs)) return emptyData();
   const migrated = { ...data };
   if (!Array.isArray(migrated.sessions)) migrated.sessions = [];
+  if (!Array.isArray(migrated.planProgress)) migrated.planProgress = [];
   if (!migrated.meta || typeof migrated.meta !== 'object') migrated.meta = {};
   migrated.version = SCHEMA_VERSION;
   return migrated;
 }
 
-// Ob an eine Sicherung erinnert werden soll: nur wenn es Einheiten gibt und die letzte Sicherung fehlt oder alt ist.
+// Der Hund, mit dem gerade gearbeitet wird: der gewählte, sonst der erste.
+export function activeDog(data) {
+  return data.dogs.find((d) => d.id === data.meta.activeDogId) ?? data.dogs[0] ?? null;
+}
+
+// Ob an eine Sicherung erinnert werden soll: nur wenn es Einheiten oder Planfortschritt gibt und die letzte Sicherung fehlt oder alt ist.
 export function backupDue(data, now = new Date()) {
-  if (data.sessions.length === 0) return false;
+  if (data.sessions.length === 0 && data.planProgress.length === 0) return false;
   const last = data.meta.lastExportAt ? Date.parse(data.meta.lastExportAt) : NaN;
   if (Number.isNaN(last)) return true;
   return now.getTime() - last > BACKUP_REMINDER_DAYS * 24 * 60 * 60 * 1000;
@@ -67,7 +78,33 @@ export function parseBackup(raw) {
       throw new Error(`Einheit ${i + 1} in der Sicherung ist fehlerhaft: ${error.message}`);
     }
   });
-  return { ...emptyData(), dogs, sessions, meta: { lastExportAt: data.meta.lastExportAt ?? null } };
+  const planProgress = normalizeProgressList(data.planProgress, dogIds);
+  const meta = { lastExportAt: data.meta.lastExportAt ?? null };
+  if (dogIds.has(data.meta.activeDogId)) meta.activeDogId = data.meta.activeDogId;
+  return { ...emptyData(), dogs, sessions, planProgress, meta };
+}
+
+// Eintrag für den Fortschritt im Plan: Hund, Plan und Schritt als Kennungen, dazu der Status.
+export function normalizeProgress(input) {
+  const entry = { dogId: String(input?.dogId ?? ''), planId: String(input?.planId ?? ''), stepId: String(input?.stepId ?? '') };
+  if (!Object.values(entry).every((id) => ID_PATTERN.test(id))) throw new Error('ungültige Kennung.');
+  if (!STEP_STATUSES.includes(input?.status)) throw new Error('ungültiger Status.');
+  return { ...entry, status: input.status, updatedAt: isoOrNow(input?.updatedAt) };
+}
+
+// Bei doppelten Einträgen gewinnt der letzte. Einträge für unbekannte Hunde fallen weg.
+function normalizeProgressList(list, dogIds) {
+  const byKey = new Map();
+  (Array.isArray(list) ? list : []).forEach((raw, i) => {
+    let entry;
+    try {
+      entry = normalizeProgress(raw);
+    } catch (error) {
+      throw new Error(`Planfortschritt ${i + 1} in der Sicherung ist fehlerhaft: ${error.message}`);
+    }
+    if (dogIds.has(entry.dogId)) byKey.set(`${entry.dogId}/${entry.planId}/${entry.stepId}`, entry);
+  });
+  return [...byKey.values()];
 }
 
 function idOrNew(id) {
@@ -94,23 +131,60 @@ export function createStore(backend) {
   return {
     load,
 
-    async getDog() {
-      return (await load()).dogs[0] ?? null;
+    async listDogs() {
+      return (await load()).dogs;
     },
 
-    // Speichert das Hundeprofil. Vorerst gibt es genau einen Hund.
+    // Der aktive Hund: der gewählte, sonst der erste.
+    async getDog() {
+      return activeDog(await load());
+    },
+
+    async setActiveDog(id) {
+      const data = await load();
+      if (!data.dogs.some((d) => d.id === id)) throw new Error('Dieser Hund existiert nicht (mehr).');
+      data.meta.activeDogId = id;
+      await save(data);
+      return activeDog(data);
+    },
+
+    // Ändert den Hund mit input.id oder legt einen neuen an. Ein neuer Hund wird gleich zum aktiven Hund.
     async saveDog(input) {
       const dog = normalizeDog(input);
       const data = await load();
-      const existing = data.dogs[0];
-      data.dogs = [{ ...existing, ...dog, id: existing?.id ?? newId(), updatedAt: new Date().toISOString() }];
+      const now = new Date().toISOString();
+      if (input?.id) {
+        const index = data.dogs.findIndex((d) => d.id === input.id);
+        if (index < 0) throw new Error('Dieser Hund existiert nicht (mehr).');
+        data.dogs[index] = { ...data.dogs[index], ...dog, updatedAt: now };
+        await save(data);
+        return data.dogs[index];
+      }
+      const created = { id: newId(), ...dog, updatedAt: now };
+      data.dogs.push(created);
+      data.meta.activeDogId = created.id;
       await save(data);
-      return data.dogs[0];
+      return created;
     },
 
-    // Trainingseinheiten, neueste zuerst.
-    async listSessions() {
-      return sortSessions((await load()).sessions);
+    // Löscht den Hund samt seinen Einheiten und seinem Planfortschritt. Liefert null, wenn es ihn nicht gibt.
+    async deleteDog(id) {
+      const data = await load();
+      const index = data.dogs.findIndex((d) => d.id === id);
+      if (index < 0) return null;
+      const removedSessions = data.sessions.filter((s) => s.dogId === id).length;
+      data.dogs.splice(index, 1);
+      data.sessions = data.sessions.filter((s) => s.dogId !== id);
+      data.planProgress = data.planProgress.filter((p) => p.dogId !== id);
+      if (data.meta.activeDogId === id) delete data.meta.activeDogId;
+      await save(data);
+      return { removedSessions };
+    },
+
+    // Trainingseinheiten, neueste zuerst. Mit dogId nur die Einheiten dieses Hundes.
+    async listSessions(dogId) {
+      const sessions = (await load()).sessions;
+      return sortSessions(dogId ? sessions.filter((s) => s.dogId === dogId) : sessions);
     },
 
     async getSession(id) {
@@ -121,7 +195,7 @@ export function createStore(backend) {
     async saveSession(input) {
       const fields = normalizeSession(input);
       const data = await load();
-      const dog = data.dogs[0];
+      const dog = data.dogs.find((d) => d.id === input?.dogId) ?? activeDog(data);
       if (!dog) throw new Error('Bitte zuerst deinen Hund erfassen.');
       const now = new Date().toISOString();
       const index = data.sessions.findIndex((s) => s.id === input?.id);
@@ -143,19 +217,40 @@ export function createStore(backend) {
       return true;
     },
 
+    // Fortschritt im Plan für einen Hund: { planId: { stepId: { status, updatedAt } } }. Offene Schritte fehlen.
+    async getProgress(dogId) {
+      const result = {};
+      for (const p of (await load()).planProgress) {
+        if (p.dogId === dogId) (result[p.planId] ??= {})[p.stepId] = { status: p.status, updatedAt: p.updatedAt };
+      }
+      return result;
+    },
+
+    // Setzt den Status eines Schrittes auf 'open', 'doing' oder 'done'.
+    async setStepStatus({ dogId, planId, stepId, status }) {
+      if (status !== 'open') normalizeProgress({ dogId, planId, stepId, status });
+      else if (![dogId, planId, stepId].every((id) => ID_PATTERN.test(String(id)))) throw new Error('ungültige Kennung.');
+      const data = await load();
+      if (!data.dogs.some((d) => d.id === dogId)) throw new Error('Dieser Hund existiert nicht (mehr).');
+      data.planProgress = data.planProgress.filter((p) => !(p.dogId === dogId && p.planId === planId && p.stepId === stepId));
+      if (status !== 'open') data.planProgress.push({ dogId, planId, stepId, status, updatedAt: new Date().toISOString() });
+      await save(data);
+      return status;
+    },
+
     // Liefert alle Daten als Sicherung und merkt sich den Zeitpunkt.
     async exportBackup(now = new Date()) {
       const data = await load();
       data.meta.lastExportAt = now.toISOString();
       await save(data);
-      return { format: EXPORT_FORMAT, version: SCHEMA_VERSION, exportedAt: data.meta.lastExportAt, dogs: data.dogs, sessions: data.sessions, meta: data.meta };
+      return { format: EXPORT_FORMAT, version: SCHEMA_VERSION, exportedAt: data.meta.lastExportAt, dogs: data.dogs, sessions: data.sessions, planProgress: data.planProgress, meta: data.meta };
     },
 
     // Ersetzt alle Daten durch den Inhalt einer Sicherung.
     async importBackup(raw) {
       const data = parseBackup(raw);
       await save(data);
-      return { dogs: data.dogs.length, sessions: data.sessions.length, lastExportAt: data.meta.lastExportAt };
+      return { dogs: data.dogs.length, sessions: data.sessions.length, planProgress: data.planProgress.length, lastExportAt: data.meta.lastExportAt };
     },
 
     async backupDue(now) {
