@@ -33,7 +33,7 @@ test('Import stellt einen Export vollständig wieder her', async () => {
   const target = createStore(memoryBackend());
   await target.saveDog({ name: 'Anderer' });
   const result = await target.importBackup(JSON.stringify(backup));
-  assert.deepEqual(result, { dogs: 1, sessions: 2, planProgress: 0, lastExportAt: backup.exportedAt });
+  assert.deepEqual(result, { dogs: 1, sessions: 2, planProgress: 0, planChecks: 0, lastExportAt: backup.exportedAt });
   assert.equal((await target.getDog()).name, 'Arko');
   assert.deepEqual(await target.listSessions(), sourceSessions);
   assert.equal((await target.load()).meta.lastExportAt, backup.exportedAt);
@@ -52,6 +52,7 @@ test('Erinnerung an Sicherung nur mit Einheiten und wenn die letzte Sicherung al
   assert.equal(backupDue({ ...base, sessions: [] }, now), false);
   // Auch Planfortschritt allein ist sicherungswürdig.
   assert.equal(backupDue({ ...base, sessions: [], planProgress: [{ dogId: 'a', planId: 'p', stepId: 's', status: 'done' }] }, now), true);
+  assert.equal(backupDue({ ...base, sessions: [], planChecks: [{ dogId: 'a', planId: 'p', stepId: 's', exercise: 'Ablegen' }] }, now), true);
   assert.equal(backupDue(base, now), true);
   assert.equal(backupDue({ ...base, meta: { lastExportAt: '2026-10-01T00:00:00Z' } }, now), false);
   assert.equal(backupDue({ ...base, meta: { lastExportAt: '2026-08-01T00:00:00Z' } }, now), true);
@@ -98,17 +99,36 @@ test('Export und Import mit mehreren Hunden, Planfortschritt und aktivem Hund', 
   await source.saveSession({ date: '2026-10-05', exercises: [{ name: 'Ablegen' }] });
   await source.setStepStatus({ dogId: arko.id, planId: 'plan', stepId: 'eins', status: 'done' });
   await source.setStepStatus({ dogId: bella.id, planId: 'plan', stepId: 'eins', status: 'doing' });
+  await source.setExerciseChecked({ dogId: arko.id, planId: 'plan', stepId: 'eins', exercise: 'Ablegen', checked: true });
+  await source.setExerciseChecked({ dogId: bella.id, planId: 'plan', stepId: 'eins', exercise: 'Appell', checked: true });
   await source.setActiveDog(arko.id);
   const backup = JSON.parse(JSON.stringify(await source.exportBackup()));
   assert.equal(backup.planProgress.length, 2);
+  assert.equal(backup.planChecks.length, 2);
 
   const target = createStore(memoryBackend());
   const result = await target.importBackup(backup);
-  assert.deepEqual([result.dogs, result.sessions, result.planProgress], [2, 3, 2]);
+  assert.deepEqual([result.dogs, result.sessions, result.planProgress, result.planChecks], [2, 3, 2, 2]);
   assert.equal((await target.getDog()).id, arko.id);
+  assert.deepEqual((await target.getChecks(arko.id)).plan.eins, ['Ablegen']);
+  assert.deepEqual((await target.getChecks(bella.id)).plan.eins, ['Appell']);
   assert.equal((await target.listSessions(bella.id)).length, 1);
   assert.equal((await target.getProgress(arko.id)).plan.eins.status, 'done');
   assert.equal((await target.getProgress(bella.id)).plan.eins.status, 'doing');
+});
+
+test('Sicherung aus Version 4 (ohne abgehakte Übungen) lässt sich importieren', async () => {
+  const target = createStore(memoryBackend());
+  const result = await target.importBackup({
+    format: EXPORT_FORMAT,
+    version: 4,
+    dogs: [{ id: 'hund-1', name: 'Arko' }],
+    sessions: [],
+    planProgress: [{ dogId: 'hund-1', planId: 'plan', stepId: 'eins', status: 'doing' }],
+    meta: {},
+  });
+  assert.deepEqual([result.dogs, result.planProgress, result.planChecks], [1, 1, 0]);
+  assert.equal((await target.getProgress('hund-1')).plan.eins.status, 'doing');
 });
 
 test('Sicherung aus Version 3 (ohne Planfortschritt) lässt sich importieren', async () => {
@@ -140,4 +160,21 @@ test('Import prüft Planfortschritt: fehlerhafte Einträge werden abgelehnt, unb
   assert.equal(data.planProgress.length, 1);
   assert.equal(data.planProgress[0].status, 'done');
   assert.equal('activeDogId' in data.meta, false);
+});
+
+test('Import prüft abgehakte Übungen: Fehler werden abgelehnt, unbekannte Hunde und Doppelte bereinigt', () => {
+  const base = { format: EXPORT_FORMAT, version: SCHEMA_VERSION, dogs: [{ id: 'a', name: 'Arko' }], sessions: [] };
+  assert.throws(() => parseBackup({ ...base, planChecks: [{ dogId: 'a', planId: 'p', stepId: 's', exercise: '' }] }), /Abgehakte Übung 1 .*Übung/);
+  assert.throws(() => parseBackup({ ...base, planChecks: [{ dogId: 'a', planId: '../p', stepId: 's', exercise: 'Ablegen' }] }), /Abgehakte Übung 1 .*Kennung/);
+  assert.throws(() => parseBackup({ ...base, planChecks: [{ dogId: 'a', planId: 'p', stepId: 's', exercise: 'x'.repeat(121) }] }), /Abgehakte Übung 1/);
+  const data = parseBackup({
+    ...base,
+    planChecks: [
+      { dogId: 'a', planId: 'p', stepId: 's', exercise: ' Ablegen ' },
+      { dogId: 'a', planId: 'p', stepId: 's', exercise: 'Ablegen' },
+      { dogId: 'a', planId: 'p', stepId: 's', exercise: 'Appell' },
+      { dogId: 'unbekannt', planId: 'p', stepId: 's', exercise: 'Ablegen' },
+    ],
+  });
+  assert.deepEqual(data.planChecks.map((c) => c.exercise), ['Ablegen', 'Appell']);
 });

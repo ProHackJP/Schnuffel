@@ -58,14 +58,50 @@ export function planExerciseNames() {
   return PLANS.flatMap((plan) => plan.steps.flatMap((step) => step.exercises.map((e) => e.name)));
 }
 
-// Zusammenfassung des Fortschritts eines Hundes in einem Plan: { done, doing, total }.
-export function summarize(plan, planProgress = {}) {
+// Ob ein Schritt als «in Arbeit» gilt: ältere Daten kennen den Status noch, sonst genügt eine abgehakte Übung.
+export function isDoing(step, planProgress = {}, checks = {}) {
+  const status = planProgress[step.id]?.status;
+  if (status === 'done') return false;
+  return status === 'doing' || exerciseNamesChecked(step, checks).length > 0;
+}
+
+// Namen der abgehakten Übungen eines Schrittes. Haken auf Übungen, die es im Plan nicht mehr gibt, zählen nicht.
+function exerciseNamesChecked(step, checks) {
+  const checked = new Set(checks[step.id] ?? []);
+  return step.exercises.map((e) => e.name).filter((name) => checked.has(name));
+}
+
+// Zusammenfassung des Fortschritts eines Hundes in einem Plan.
+// planProgress: { stepId: { status } }, checks: { stepId: [Übungsname] } (beides nur für diesen Plan).
+export function summarize(plan, planProgress = {}, checks = {}) {
   let done = 0;
   let doing = 0;
+  let exercisesDone = 0;
+  let exercisesTotal = 0;
   for (const step of plan.steps) {
-    const status = planProgress[step.id]?.status;
-    if (status === 'done') done += 1;
-    else if (status === 'doing') doing += 1;
+    if (planProgress[step.id]?.status === 'done') done += 1;
+    else if (isDoing(step, planProgress, checks)) doing += 1;
+    exercisesDone += exerciseNamesChecked(step, checks).length;
+    exercisesTotal += step.exercises.length;
   }
-  return { done, doing, total: plan.steps.length };
+  const total = plan.steps.length;
+  return { done, doing, total, exercisesDone, exercisesTotal, openCount: total - done + exercisesTotal - exercisesDone };
+}
+
+// Ob der Hund in diesem Plan schon etwas abgehakt hat.
+export function isStarted(plan, planProgress = {}, checks = {}) {
+  return plan.steps.some((step) => planProgress[step.id] || exerciseNamesChecked(step, checks).length > 0);
+}
+
+// Die offenen Punkte eines Plans in Planreihenfolge: nicht abgehakte Schritte und nicht abgehakte Übungen.
+// Ein Eintrag je Schritt, der noch etwas Offenes hat: { step, index, stepOpen, exercises }.
+export function openPoints(plan, planProgress = {}, checks = {}) {
+  const result = [];
+  plan.steps.forEach((step, index) => {
+    const stepOpen = planProgress[step.id]?.status !== 'done';
+    const checked = new Set(exerciseNamesChecked(step, checks));
+    const exercises = step.exercises.filter((e) => !checked.has(e.name));
+    if (stepOpen || exercises.length > 0) result.push({ step, index, stepOpen, exercises });
+  });
+  return result;
 }

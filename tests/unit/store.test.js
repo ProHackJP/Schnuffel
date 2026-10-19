@@ -119,6 +119,63 @@ test('Planfortschritt: ungültige Angaben werden abgelehnt', async () => {
   assert.equal((await store.load()).planProgress.length, 0);
 });
 
+test('Abgehakte Übungen: setzen, zurücknehmen, je Hund und je Schritt getrennt, ohne Doppelte', async () => {
+  const store = createStore(memoryBackend());
+  const arko = await store.saveDog({ name: 'Arko' });
+  const bella = await store.saveDog({ name: 'Bella' });
+  assert.deepEqual(await store.getChecks(arko.id), {});
+  const check = (input) => store.setExerciseChecked({ dogId: arko.id, planId: 'plan-a', stepId: 'eins', exercise: 'Ablegen', checked: true, ...input });
+  assert.equal(await check(), true);
+  await check();
+  await check({ exercise: 'Appell' });
+  await check({ stepId: 'zwei' });
+  assert.deepEqual(await store.getChecks(arko.id), { 'plan-a': { eins: ['Ablegen', 'Appell'], zwei: ['Ablegen'] } });
+  assert.equal((await store.load()).planChecks.length, 3);
+  assert.deepEqual(await store.getChecks(bella.id), {});
+
+  assert.equal(await check({ checked: false }), false);
+  assert.deepEqual((await store.getChecks(arko.id))['plan-a'].eins, ['Appell']);
+  await check({ exercise: 'Appell', checked: false });
+  assert.equal((await store.getChecks(arko.id))['plan-a'].eins, undefined);
+  // Ein Haken, der nie gesetzt war, kann ohne Fehler zurückgenommen werden.
+  await check({ exercise: 'Nie gesetzt', checked: false });
+  assert.equal((await store.load()).planChecks.length, 1);
+});
+
+test('Schnell hintereinander gesetzte Haken gehen nicht verloren', async () => {
+  const store = createStore(memoryBackend());
+  const arko = await store.saveDog({ name: 'Arko' });
+  const tick = (exercise) => store.setExerciseChecked({ dogId: arko.id, planId: 'p', stepId: 's', exercise, checked: true });
+  await Promise.all([tick('Leinenführigkeit'), tick('Ablegen'), tick('Schussruhe'), store.setStepStatus({ dogId: arko.id, planId: 'p', stepId: 's', status: 'done' })]);
+  assert.deepEqual((await store.getChecks(arko.id)).p.s, ['Leinenführigkeit', 'Ablegen', 'Schussruhe']);
+  assert.equal((await store.getProgress(arko.id)).p.s.status, 'done');
+  // Ein Fehler in einer Änderung blockiert die folgenden nicht.
+  await Promise.allSettled([store.setExerciseChecked({ dogId: arko.id, planId: 'p', stepId: 's', exercise: '', checked: true }), tick('Appell')]);
+  assert.equal((await store.getChecks(arko.id)).p.s.length, 4);
+});
+
+test('Abgehakte Übungen: ungültige Angaben werden abgelehnt', async () => {
+  const store = createStore(memoryBackend());
+  const arko = await store.saveDog({ name: 'Arko' });
+  const ok = { dogId: arko.id, planId: 'plan', stepId: 'schritt', exercise: 'Ablegen', checked: true };
+  await assert.rejects(store.setExerciseChecked({ ...ok, exercise: '  ' }), /Übung/);
+  await assert.rejects(store.setExerciseChecked({ ...ok, exercise: 'x'.repeat(121) }), /Übung/);
+  await assert.rejects(store.setExerciseChecked({ ...ok, planId: '../x' }), /Kennung/);
+  await assert.rejects(store.setExerciseChecked({ ...ok, dogId: 'gibts-nicht' }), /existiert nicht/);
+  assert.equal((await store.load()).planChecks.length, 0);
+});
+
+test('Hund löschen entfernt auch seine abgehakten Übungen', async () => {
+  const store = createStore(memoryBackend());
+  const arko = await store.saveDog({ name: 'Arko' });
+  const bella = await store.saveDog({ name: 'Bella' });
+  await store.setExerciseChecked({ dogId: arko.id, planId: 'p', stepId: 's', exercise: 'Ablegen', checked: true });
+  await store.setExerciseChecked({ dogId: bella.id, planId: 'p', stepId: 's', exercise: 'Ablegen', checked: true });
+  await store.deleteDog(bella.id);
+  assert.deepEqual(await store.getChecks(bella.id), {});
+  assert.deepEqual((await store.getChecks(arko.id)).p.s, ['Ablegen']);
+});
+
 test('kaputte Daten im Speicher führen nicht zum Absturz', async () => {
   const backend = memoryBackend();
   await backend.set(DATA_KEY, { dogs: 'falsch' });
@@ -133,6 +190,7 @@ test('Daten aus Etappe 1 (ohne Einheiten) werden übernommen', () => {
   assert.equal(data.version, SCHEMA_VERSION);
   assert.deepEqual(data.sessions, []);
   assert.deepEqual(data.planProgress, []);
+  assert.deepEqual(data.planChecks, []);
   assert.deepEqual(data.meta, {});
   assert.equal(data.dogs[0].name, 'Arko');
 });

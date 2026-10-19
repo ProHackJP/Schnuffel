@@ -396,26 +396,94 @@ a.plan {
   border-width: 2px;
 }
 
-.status-toggle {
+.check {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
+  align-items: flex-start;
+  gap: 12px;
+  margin-top: 0;
+  min-height: 44px;
+  padding: 8px 0;
+  cursor: pointer;
 }
 
-.status-toggle .toggle {
-  flex: 1 1 0;
-  margin-top: 4px;
-  padding: 6px 4px;
-  font-size: 0.9rem;
-  min-height: 40px;
+input[type='checkbox'] {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--accent);
+}
+
+.step-check {
+  display: grid;
+  gap: 0;
+  padding: 2px 12px 6px;
+  border-radius: 10px;
+  background: var(--bg);
+}
+
+.step-check .check {
+  font-size: 1.05rem;
+}
+
+.step-status {
+  margin: 0 0 4px 38px;
+  color: var(--muted);
+}
+
+.step[data-status='done'] .step-status {
+  color: var(--ok);
+}
+
+.exercises-plan li[data-checked='true'] .check {
+  color: var(--ok);
+}
+
+.exercise-info {
+  margin-left: 38px;
+}
+
+.open-points {
+  margin-top: 12px;
+}
+
+.open-points summary {
+  font-weight: 700;
+  cursor: pointer;
+  min-height: 32px;
+}
+
+.open-points-list,
+.open-points-list ul {
+  margin: 6px 0 0;
+  padding-left: 20px;
+  display: grid;
+  gap: 4px;
+}
+
+.open-points-list > li > ul {
+  list-style: circle;
+}
+
+.open-plan h2 {
+  margin: 0 0 4px;
+}
+
+.open-plan .progress-text {
+  margin: 0 0 4px;
+}
+
+.link-button {
+  display: block;
+  margin: 0;
+  padding: 4px 0;
+  min-height: 36px;
   background: transparent;
   color: var(--accent);
-  border: 2px solid var(--accent);
-}
-
-.status-toggle .toggle[aria-pressed='true'] {
-  background: var(--accent);
-  color: var(--accent-text);
+  font-weight: 600;
+  text-align: left;
+  text-decoration: underline;
 }
 
 .caveat {
@@ -431,4 +499,9 @@ a.plan {
 
 .step .rules {
   padding: 4px 4px 4px 22px;
+}
+
+.step .exercises-plan {
+  list-style: none;
+  padding: 4px 0;
 }

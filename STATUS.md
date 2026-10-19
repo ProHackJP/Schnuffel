@@ -6,11 +6,11 @@ Diese Datei ist die Zielliste des Projekts. Sie wird bei jeder Etappe nachgefüh
 
 **Arbeitsweise:** Kleine Etappen mit Akzeptanzkriterien und Tests. Fachliche Inhalte (Ausbildung, Prüfungsordnungen CH/EU, Tierschutz, Trainingsmethoden) werden erst aufgenommen, wenn sie mit Quellen geprüft sind (Chain of Verification). Nicht Verifiziertes wird gekennzeichnet.
 
-Stand: 2026-10-18 (Etappen 1 bis 7, App veröffentlicht)
+Stand: 2026-10-19 (Etappen 1 bis 7 und Kontrollkästchen in den Plänen, App veröffentlicht bis Version 0.5.0)
 
 ## Nächster Schritt
 
-Etappe 7 (Trainingspläne, mehrere Hunde) ist gebaut und wartet auf die Zusammenführung. Jules probiert danach auf dem Handy aus: Installation als App, Offline-Start, Datensicherung, zweiten Hund anlegen, einen Plan abhaken. Danach folgt Etappe 8 (Auswertung: Fortschritt und Statistik pro Hund). Offen für die Fachinhalte: Prüfungsordnung des BEJV im Wortlaut (siehe «Was nicht belegt ist» im Plan) und weitere Kantone.
+Etappe 7 (Trainingspläne, mehrere Hunde) ist gebaut, auf Wunsch von Jules mit Kontrollkästchen für Schritte und Übungen und einer Ansicht «Offene Punkte» (Version 0.7.0), und wartet auf die Zusammenführung. Jules probiert danach auf dem Handy aus: Installation als App, Offline-Start, Datensicherung, zweiten Hund anlegen, Schritte und Übungen abhaken, offene Punkte ansehen. Danach folgt Etappe 8 (Auswertung: Fortschritt und Statistik pro Hund). Offen für die Fachinhalte: Prüfungsordnung des BEJV im Wortlaut (siehe «Was nicht belegt ist» im Plan) und weitere Kantone.
 
 ## Etappen
 
@@ -117,7 +117,10 @@ Akzeptanzkriterien:
 - [x] Neue Einheiten gehören zum aktiven Hund, das Tagebuch zeigt nur dessen Einheiten (Unit- und E2E-Test)
 - [x] Daten aus Schema 3 werden ohne Verlust übernommen, Sicherung exportiert und importiert mehrere Hunde und den Planfortschritt, alte Sicherungen bleiben lesbar (Unit- und E2E-Test)
 - [x] Menüpunkt «Pläne» mit Übersicht und Planansicht, offline verfügbar (E2E-Test)
-- [x] Schritte pro Hund auf «Offen», «In Arbeit» oder «Geschafft» setzen, getrennter Fortschritt je Hund, bleibt nach Neuladen, geht auch offline (Unit- und E2E-Test)
+- [x] Schritte pro Hund mit einem Kontrollkästchen als «geschafft» abhaken und wieder zurücknehmen, getrennter Fortschritt je Hund, bleibt nach Neuladen, geht auch offline (Unit- und E2E-Test)
+- [x] Jede Übung eines Schritts hat ebenfalls ein Kontrollkästchen. Ein Schritt mit mindestens einer abgehakten Übung gilt als «In Arbeit», sind alle Übungen abgehakt, erinnert die App daran, den Schritt zu prüfen (Unit- und E2E-Test)
+- [x] Offene Punkte bleiben sichtbar: Im Plan zeigt ein Feld «Offene Punkte» alle nicht abgehakten Schritte und Übungen (mit Sprung zum Schritt), die Seite «Offene Punkte» (`#/plaene/offen`) zeigt sie für alle begonnenen Pläne des aktiven Hundes (Unit- und E2E-Test)
+- [x] Abgehakte Übungen gehören zur Datensicherung, Sicherungen aus Schema 3 und 4 bleiben lesbar (Unit- und E2E-Test)
 - [x] Jede Übung hat «Ins Tagebuch», der Plan zeigt die Anzahl Einträge und die letzte Bewertung (E2E-Test)
 - [x] Jeder Schritt nennt seine Quellen (Titel, Herausgeber, https-Adresse, Abrufdatum) oder ist als Vorschlag von Schnuffel gekennzeichnet (Unit-Test)
 - [x] Herdenschutzhund-Plan: die fünf Phasen aus Etappe 6 als Schritte, alle Übungen übernommen (Unit-Test)
@@ -145,8 +148,11 @@ Wunsch von Jules (Interview, 2026-10-16): nach dem Trainingsplan die Auswertung.
 ## Annahmen (Etappe 7)
 
 - **Eine Person, mehrere Hunde, ein Gerät.** Mehrere Personen oder Konten sind nicht vorgesehen (Antwort «Mehrere Hunde» im Interview).
-- **«Geschafft» bestätigt Jules selbst.** Die App entscheidet das nicht automatisch aus dem Tagebuch. Das Tagebuch zeigt je Übung nur, wie oft sie geübt wurde.
-- **Pläne sind unveränderliche Daten in der App** (`src/content/plans.js`, `jagdhund-be.js`, `hsh-ausbildung.js`). Gespeichert wird nur der Fortschritt pro Hund (Schema 4, Liste `planProgress`). «Offen» ist der Normalzustand und wird nicht gespeichert.
+- **«Geschafft» bestätigt Jules selbst.** Die App entscheidet das nicht automatisch aus dem Tagebuch und auch nicht aus den abgehakten Übungen. Das Tagebuch zeigt je Übung nur, wie oft sie geübt wurde.
+- **Kontrollkästchen auf zwei Ebenen (Wunsch Jules, 2026-10-19):** Jeder Schritt und jede Übung darin hat ein Kästchen. Ich habe «Trainingseinheiten» und «Teilschritte» so gedeutet: Schritte des Plans und Übungen darin. Die Aussagen unter «Das gilt in Schritt» sind Information und haben kein Kästchen. «In Arbeit» setzt Jules nicht mehr selbst, die App leitet es aus den abgehakten Übungen ab. Ältere Daten mit dem Status «In Arbeit» bleiben gültig.
+- **Offene Punkte** sind alle nicht abgehakten Schritte und alle nicht abgehakten Übungen, auch wenn der Schritt selbst abgehakt ist. Die Seite «Offene Punkte» listet nur Pläne, in denen schon etwas abgehakt ist, die übrigen stehen als «Noch nicht begonnen» darunter.
+- **Abgehakte Übungen werden über den Übungsnamen gespeichert** (Schema 5, Liste `planChecks`, gleiche Kennung wie im Tagebuch). Würde ein Übungsname im Plan später geändert, verliert der Haken seine Wirkung, ohne Fehler.
+- **Pläne sind unveränderliche Daten in der App** (`src/content/plans.js`, `jagdhund-be.js`, `hsh-ausbildung.js`). Gespeichert wird nur der Fortschritt pro Hund (Schema 4 Liste `planProgress` für Schritte, ab Schema 5 Liste `planChecks` für Übungen). «Offen» ist der Normalzustand und wird nicht gespeichert.
 - **Neuer Hund wird gleich aktiv.** Beim Löschen eines Hundes fallen seine Einheiten und sein Planfortschritt weg, die Rückfrage nennt die Anzahl. Ohne Auswahl gilt der erste Hund.
 - **Kennzeichnung der Übungen:** Prüfungsteile aus einer Quelle zeigen die Quelle, alle anderen Übungen sind «Vorschlag von Schnuffel». Gleiches gilt für das Kriterium «Geschafft, wenn».
 - **Sechs Menüpunkte** (Start, Hund, Training, Pläne, Herdenschutz, Info). Bei 360 Pixel Breite noch lesbar, «Herdenschutz» bricht um. Bei weiteren Themen wird ein Menüpunkt «Wissen» sinnvoll.

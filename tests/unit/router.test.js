@@ -16,6 +16,7 @@ test('bekannte Routen werden erkannt', () => {
   assert.deepEqual(parseHash('#/hund/neu'), { name: 'hund-neu', id: null });
   assert.deepEqual(parseHash('#/hund/0b1c-42'), { name: 'hund-edit', id: '0b1c-42' });
   assert.deepEqual(parseHash('#/plaene'), { name: 'plaene', id: null });
+  assert.deepEqual(parseHash('#/plaene/offen'), { name: 'plaene-offen', id: null });
   assert.deepEqual(parseHash('#/plaene/herdenschutzhund'), { name: 'plaene-plan', id: 'herdenschutzhund' });
 });
 
@@ -38,4 +39,5 @@ test('Menüpunkt zur Route', () => {
   assert.equal(tabFor(parseHash('#/hund/neu')), '/hund');
   assert.equal(tabFor(parseHash('#/hund/abc')), '/hund');
   assert.equal(tabFor(parseHash('#/plaene/herdenschutzhund')), '/plaene');
+  assert.equal(tabFor(parseHash('#/plaene/offen')), '/plaene');
 });

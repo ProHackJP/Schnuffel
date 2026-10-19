@@ -38,7 +38,7 @@ Für die Browser-Tests einmalig `npx playwright install chromium` ausführen.
 | `index.html` | Seitengerüst mit Navigation |
 | `src/app.js` | Ansichten und Ablauf |
 | `src/router.js` | Navigation über `#/pfad` |
-| `src/store.js` | Datenlogik: Hunde, Trainingseinheiten, Planfortschritt, Sicherung, Validierung |
+| `src/store.js` | Datenlogik: Hunde, Trainingseinheiten, Planfortschritt (Schritte und Übungen abhaken), Sicherung, Validierung |
 | `src/content/herdenschutz.js` | Fachinhalt Herdenschutz mit Quellen (geprüft, siehe STATUS.md) |
 | `src/content/hsh-ausbildung.js` | Ausbildungsplan Herdenschutzhund mit Quellen (geprüft, siehe STATUS.md) |
 | `src/content/jagdhund-be.js` | Trainingsplan Jagdhund im Kanton Bern mit Quellen und Lücken (geprüft, siehe STATUS.md) |

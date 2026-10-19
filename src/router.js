@@ -8,6 +8,7 @@ const STATIC = {
   '/training': 'training',
   '/training/neu': 'training-neu',
   '/plaene': 'plaene',
+  '/plaene/offen': 'plaene-offen',
   '/herdenschutz': 'herdenschutz',
   '/herdenschutz/ausbildung': 'herdenschutz-ausbildung',
   '/info': 'info',

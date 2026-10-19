@@ -2,12 +2,13 @@
 // Wo die Daten liegen, entscheidet das übergebene Backend (siehe storage.js). So lässt sich die Logik ohne Browser testen.
 
 export const DATA_KEY = 'schnuffel:v1';
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 export const EXPORT_FORMAT = 'schnuffel-backup';
 
 export const RATINGS = [1, 2, 3, 4, 5];
 
 // Fortschritt eines Schrittes im Trainingsplan. «Offen» ist der Normalzustand und wird nicht gespeichert.
+// 'doing' setzt die Oberfläche nicht mehr selbst (sie leitet «in Arbeit» aus den abgehakten Übungen ab), ältere Daten können es noch enthalten.
 export const STEP_STATUSES = ['doing', 'done'];
 
 const ID_PATTERN = /^[A-Za-z0-9-]{1,64}$/;
@@ -16,7 +17,7 @@ const ID_PATTERN = /^[A-Za-z0-9-]{1,64}$/;
 export const BACKUP_REMINDER_DAYS = 30;
 
 export function emptyData() {
-  return { version: SCHEMA_VERSION, dogs: [], sessions: [], planProgress: [], meta: {} };
+  return { version: SCHEMA_VERSION, dogs: [], sessions: [], planProgress: [], planChecks: [], meta: {} };
 }
 
 // Bringt gespeicherte Daten älterer Versionen auf den aktuellen Stand.
@@ -25,6 +26,7 @@ export function migrate(data) {
   const migrated = { ...data };
   if (!Array.isArray(migrated.sessions)) migrated.sessions = [];
   if (!Array.isArray(migrated.planProgress)) migrated.planProgress = [];
+  if (!Array.isArray(migrated.planChecks)) migrated.planChecks = [];
   if (!migrated.meta || typeof migrated.meta !== 'object') migrated.meta = {};
   migrated.version = SCHEMA_VERSION;
   return migrated;
@@ -37,7 +39,7 @@ export function activeDog(data) {
 
 // Ob an eine Sicherung erinnert werden soll: nur wenn es Einheiten oder Planfortschritt gibt und die letzte Sicherung fehlt oder alt ist.
 export function backupDue(data, now = new Date()) {
-  if (data.sessions.length === 0 && data.planProgress.length === 0) return false;
+  if (data.sessions.length === 0 && data.planProgress.length === 0 && (data.planChecks ?? []).length === 0) return false;
   const last = data.meta.lastExportAt ? Date.parse(data.meta.lastExportAt) : NaN;
   if (Number.isNaN(last)) return true;
   return now.getTime() - last > BACKUP_REMINDER_DAYS * 24 * 60 * 60 * 1000;
@@ -79,9 +81,10 @@ export function parseBackup(raw) {
     }
   });
   const planProgress = normalizeProgressList(data.planProgress, dogIds);
+  const planChecks = normalizeChecksList(data.planChecks, dogIds);
   const meta = { lastExportAt: data.meta.lastExportAt ?? null };
   if (dogIds.has(data.meta.activeDogId)) meta.activeDogId = data.meta.activeDogId;
-  return { ...emptyData(), dogs, sessions, planProgress, meta };
+  return { ...emptyData(), dogs, sessions, planProgress, planChecks, meta };
 }
 
 // Eintrag für den Fortschritt im Plan: Hund, Plan und Schritt als Kennungen, dazu der Status.
@@ -107,6 +110,30 @@ function normalizeProgressList(list, dogIds) {
   return [...byKey.values()];
 }
 
+// Abgehakte Übung im Plan: Hund, Plan und Schritt als Kennungen, dazu der Übungsname (wie im Plan und im Tagebuch).
+export function normalizeCheck(input) {
+  const entry = { dogId: String(input?.dogId ?? ''), planId: String(input?.planId ?? ''), stepId: String(input?.stepId ?? '') };
+  if (!Object.values(entry).every((id) => ID_PATTERN.test(id))) throw new Error('ungültige Kennung.');
+  const exercise = String(input?.exercise ?? '').trim();
+  if (!exercise || exercise.length > 120) throw new Error('ungültige Übung.');
+  return { ...entry, exercise, updatedAt: isoOrNow(input?.updatedAt) };
+}
+
+// Wie bei normalizeProgressList: Doppelte fallen weg, Einträge für unbekannte Hunde ebenfalls.
+function normalizeChecksList(list, dogIds) {
+  const byKey = new Map();
+  (Array.isArray(list) ? list : []).forEach((raw, i) => {
+    let entry;
+    try {
+      entry = normalizeCheck(raw);
+    } catch (error) {
+      throw new Error(`Abgehakte Übung ${i + 1} in der Sicherung ist fehlerhaft: ${error.message}`);
+    }
+    if (dogIds.has(entry.dogId)) byKey.set(JSON.stringify([entry.dogId, entry.planId, entry.stepId, entry.exercise]), entry);
+  });
+  return [...byKey.values()];
+}
+
 function idOrNew(id) {
   return typeof id === 'string' && /^[A-Za-z0-9-]{1,64}$/.test(id) ? id : newId();
 }
@@ -116,6 +143,15 @@ function isoOrNow(value) {
 }
 
 export function createStore(backend) {
+  // Änderungen laufen nacheinander. Sonst überschreiben sich zwei schnell hintereinander angetippte Kästchen,
+  // weil beide die alten Daten laden, bevor eine von beiden gespeichert hat.
+  let queue = Promise.resolve();
+  const exclusive = (fn) => {
+    const run = queue.then(fn);
+    queue = run.catch(() => {});
+    return run;
+  };
+
   async function load() {
     try {
       return migrate(await backend.get(DATA_KEY));
@@ -128,7 +164,7 @@ export function createStore(backend) {
     await backend.set(DATA_KEY, data);
   }
 
-  return {
+  const store = {
     load,
 
     async listDogs() {
@@ -176,6 +212,7 @@ export function createStore(backend) {
       data.dogs.splice(index, 1);
       data.sessions = data.sessions.filter((s) => s.dogId !== id);
       data.planProgress = data.planProgress.filter((p) => p.dogId !== id);
+      data.planChecks = data.planChecks.filter((c) => c.dogId !== id);
       if (data.meta.activeDogId === id) delete data.meta.activeDogId;
       await save(data);
       return { removedSessions };
@@ -238,19 +275,41 @@ export function createStore(backend) {
       return status;
     },
 
+    // Abgehakte Übungen eines Hundes: { planId: { stepId: [Übungsname, ...] } }. Nicht abgehakte fehlen.
+    async getChecks(dogId) {
+      const result = {};
+      for (const c of (await load()).planChecks) {
+        if (c.dogId === dogId) ((result[c.planId] ??= {})[c.stepId] ??= []).push(c.exercise);
+      }
+      return result;
+    },
+
+    // Hakt eine Übung eines Planschrittes ab (checked: true) oder nimmt den Haken zurück.
+    async setExerciseChecked({ dogId, planId, stepId, exercise, checked }) {
+      const entry = normalizeCheck({ dogId, planId, stepId, exercise });
+      const data = await load();
+      if (!data.dogs.some((d) => d.id === dogId)) throw new Error('Dieser Hund existiert nicht (mehr).');
+      data.planChecks = data.planChecks.filter(
+        (c) => !(c.dogId === entry.dogId && c.planId === entry.planId && c.stepId === entry.stepId && c.exercise === entry.exercise),
+      );
+      if (checked) data.planChecks.push(entry);
+      await save(data);
+      return Boolean(checked);
+    },
+
     // Liefert alle Daten als Sicherung und merkt sich den Zeitpunkt.
     async exportBackup(now = new Date()) {
       const data = await load();
       data.meta.lastExportAt = now.toISOString();
       await save(data);
-      return { format: EXPORT_FORMAT, version: SCHEMA_VERSION, exportedAt: data.meta.lastExportAt, dogs: data.dogs, sessions: data.sessions, planProgress: data.planProgress, meta: data.meta };
+      return { format: EXPORT_FORMAT, version: SCHEMA_VERSION, exportedAt: data.meta.lastExportAt, dogs: data.dogs, sessions: data.sessions, planProgress: data.planProgress, planChecks: data.planChecks, meta: data.meta };
     },
 
     // Ersetzt alle Daten durch den Inhalt einer Sicherung.
     async importBackup(raw) {
       const data = parseBackup(raw);
       await save(data);
-      return { dogs: data.dogs.length, sessions: data.sessions.length, planProgress: data.planProgress.length, lastExportAt: data.meta.lastExportAt };
+      return { dogs: data.dogs.length, sessions: data.sessions.length, planProgress: data.planProgress.length, planChecks: data.planChecks.length, lastExportAt: data.meta.lastExportAt };
     },
 
     async backupDue(now) {
@@ -261,6 +320,12 @@ export function createStore(backend) {
       await backend.remove(DATA_KEY);
     },
   };
+
+  for (const name of ['setActiveDog', 'saveDog', 'deleteDog', 'saveSession', 'deleteSession', 'setStepStatus', 'setExerciseChecked', 'exportBackup', 'importBackup', 'clear']) {
+    const change = store[name];
+    store[name] = (...args) => exclusive(() => change(...args));
+  }
+  return store;
 }
 
 export function sortSessions(sessions) {

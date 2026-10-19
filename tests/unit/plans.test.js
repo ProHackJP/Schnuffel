@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PLANS, getPlan, planExerciseNames, summarize } from '../../src/content/plans.js';
+import { PLANS, getPlan, planExerciseNames, summarize, isDoing, isStarted, openPoints } from '../../src/content/plans.js';
 import { EXERCISES, PHASES } from '../../src/content/hsh-ausbildung.js';
 
 const ID = /^[a-z0-9-]{1,64}$/;
@@ -92,9 +92,64 @@ test('Übungsnamen aller Pläne stehen als Tipphilfe zur Verfügung', () => {
   assert.ok(names.includes('Bei der Herde bleiben'));
 });
 
+const exerciseTotal = (plan) => plan.steps.reduce((n, step) => n + step.exercises.length, 0);
+
 test('Zusammenfassung zählt geschaffte und laufende Schritte', () => {
   const plan = getPlan('jagdhund-bern');
-  assert.deepEqual(summarize(plan), { done: 0, doing: 0, total: plan.steps.length });
+  const total = exerciseTotal(plan);
+  assert.deepEqual(summarize(plan), { done: 0, doing: 0, total: plan.steps.length, exercisesDone: 0, exercisesTotal: total, openCount: plan.steps.length + total });
   const progress = { rahmen: { status: 'done' }, grundgehorsam: { status: 'doing' }, unbekannt: { status: 'done' } };
-  assert.deepEqual(summarize(plan, progress), { done: 1, doing: 1, total: plan.steps.length });
+  assert.deepEqual(summarize(plan, progress), { done: 1, doing: 1, total: plan.steps.length, exercisesDone: 0, exercisesTotal: total, openCount: plan.steps.length - 1 + total });
+});
+
+test('abgehakte Übungen zählen mit, ein Schritt mit abgehakter Übung gilt als in Arbeit', () => {
+  const plan = getPlan('jagdhund-bern');
+  const total = exerciseTotal(plan);
+  const checks = { grundgehorsam: ['Ablegen', 'Appell'], 'schweiss-500': ['Schweissfährte arbeiten'], rahmen: ['gibt es nicht'], unbekannt: ['Ablegen'] };
+  const sum = summarize(plan, {}, checks);
+  assert.equal(sum.exercisesDone, 3);
+  assert.equal(sum.doing, 2);
+  assert.equal(sum.done, 0);
+  assert.equal(sum.openCount, plan.steps.length + total - 3);
+
+  const grund = plan.steps.find((s) => s.id === 'grundgehorsam');
+  assert.equal(isDoing(grund, {}, checks), true);
+  assert.equal(isDoing(grund, { grundgehorsam: { status: 'done' } }, checks), false);
+  assert.equal(isDoing(plan.steps.find((s) => s.id === 'rahmen'), {}, checks), false);
+  // Ist der Schritt abgehakt, zählt er als geschafft und nicht zusätzlich als in Arbeit.
+  const done = summarize(plan, { grundgehorsam: { status: 'done' } }, checks);
+  assert.deepEqual([done.done, done.doing], [1, 1]);
+});
+
+test('begonnen ist ein Plan, sobald ein Schritt oder eine Übung abgehakt ist', () => {
+  const plan = getPlan('jagdhund-bern');
+  assert.equal(isStarted(plan), false);
+  assert.equal(isStarted(plan, {}, { unbekannt: ['Ablegen'], rahmen: ['gibt es nicht'] }), false);
+  assert.equal(isStarted(plan, { rahmen: { status: 'done' } }), true);
+  assert.equal(isStarted(plan, {}, { grundgehorsam: ['Ablegen'] }), true);
+});
+
+test('offene Punkte: alles Nicht-Abgehakte bleibt in Planreihenfolge sichtbar', () => {
+  const plan = getPlan('jagdhund-bern');
+  const all = openPoints(plan);
+  assert.equal(all.length, plan.steps.length);
+  assert.ok(all.every((p) => p.stepOpen));
+  assert.deepEqual(all.map((p) => p.index), plan.steps.map((_, i) => i));
+
+  const points = openPoints(plan, { rahmen: { status: 'done' }, grundgehorsam: { status: 'done' } }, { grundgehorsam: ['Ablegen', 'Appell'], 'schweiss-500': ['Schweissfährte arbeiten'] });
+  const byId = Object.fromEntries(points.map((p) => [p.step.id, p]));
+  // Ein abgehakter Schritt ohne offene Übungen verschwindet.
+  assert.equal(byId.rahmen, undefined);
+  // Ein abgehakter Schritt mit offenen Übungen bleibt mit diesen Übungen stehen.
+  assert.equal(byId.grundgehorsam.stepOpen, false);
+  assert.deepEqual(byId.grundgehorsam.exercises.map((e) => e.name), ['Leinenführigkeit', 'Schussruhe']);
+  // Ein offener Schritt mit abgehakter Übung bleibt offen, die abgehakte Übung fehlt in der Liste.
+  assert.equal(byId['schweiss-500'].stepOpen, true);
+  assert.equal(byId['schweiss-500'].exercises.some((e) => e.name === 'Schweissfährte arbeiten'), false);
+
+  // Alles abgehakt: nichts bleibt offen.
+  const everything = Object.fromEntries(plan.steps.map((s) => [s.id, { status: 'done' }]));
+  const allChecks = Object.fromEntries(plan.steps.map((s) => [s.id, s.exercises.map((e) => e.name)]));
+  assert.deepEqual(openPoints(plan, everything, allChecks), []);
+  assert.equal(summarize(plan, everything, allChecks).openCount, 0);
 });
