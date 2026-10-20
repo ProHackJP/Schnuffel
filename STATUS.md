@@ -6,11 +6,11 @@ Diese Datei ist die Zielliste des Projekts. Sie wird bei jeder Etappe nachgefüh
 
 **Arbeitsweise:** Kleine Etappen mit Akzeptanzkriterien und Tests. Fachliche Inhalte (Ausbildung, Prüfungsordnungen CH/EU, Tierschutz, Trainingsmethoden) werden erst aufgenommen, wenn sie mit Quellen geprüft sind (Chain of Verification). Nicht Verifiziertes wird gekennzeichnet.
 
-Stand: 2026-10-19 (Etappen 1 bis 7 und Kontrollkästchen in den Plänen, App veröffentlicht bis Version 0.5.0)
+Stand: 2026-10-20 (Etappen 1 bis 7, Kontrollkästchen und Plan «Jagdhund in Schweden», App veröffentlicht bis Version 0.5.0)
 
 ## Nächster Schritt
 
-Etappe 7 (Trainingspläne, mehrere Hunde) ist gebaut, auf Wunsch von Jules mit Kontrollkästchen für Schritte und Übungen und einer Ansicht «Offene Punkte» (Version 0.7.0), und wartet auf die Zusammenführung. Jules probiert danach auf dem Handy aus: Installation als App, Offline-Start, Datensicherung, zweiten Hund anlegen, Schritte und Übungen abhaken, offene Punkte ansehen. Danach folgt Etappe 8 (Auswertung: Fortschritt und Statistik pro Hund). Offen für die Fachinhalte: Prüfungsordnung des BEJV im Wortlaut (siehe «Was nicht belegt ist» im Plan) und weitere Kantone.
+Etappe 7 (Trainingspläne, mehrere Hunde) ist gebaut und wartet auf die Zusammenführung. Dazu kamen auf Wunsch von Jules Kontrollkästchen für Schritte und Übungen mit der Ansicht «Offene Punkte» (Version 0.7.0) und der Plan «Jagdhund in Schweden» (Version 0.8.0). Jules probiert danach auf dem Handy aus: Installation als App, Offline-Start, Datensicherung, zweiten Hund anlegen, Schritte und Übungen abhaken, offene Punkte ansehen, den Schweden-Plan fachlich prüfen. Danach folgt Etappe 8 (Auswertung: Fortschritt und Statistik pro Hund). Offen für die Fachinhalte: Prüfungsordnung des BEJV im Wortlaut (siehe «Was nicht belegt ist» im Plan) und weitere Kantone.
 
 ## Etappen
 
@@ -133,6 +133,27 @@ Chain of Verification (18.10.2026), Jagdhund-Plan Kanton Bern:
 - Nicht belegt: Wortlaut der Prüfungsordnung des BEJV (Version 1.7.2018, PDF war nicht lesbar abrufbar, der Direktabruf von bernerjagd.net ist in dieser Umgebung gesperrt), Mindestalter für die Gehorsamsprüfung, ob die Berner Schweissprüfungen genau nach dem AGJ/TKJ-Reglement laufen, was die Verordnung mit «geprüfter Apporteur» meint, ergänzende Richtlinien des Jagdinspektorats, NASU-Richtlinie. Alles steht so im Plan unter «Was nicht belegt ist».
 - Nicht verwendet: Brauchbarkeitsprüfungen aus Deutschland und Vorschriften anderer Kantone (Glarus, Schwyz u. a.). Die Jagdhunde-Vorschriften sind kantonal geregelt.
 - Keine Trainingsmethoden: Wie die Übungen aufgebaut werden, steht in keiner geprüften Quelle. Die App erfindet es nicht und verweist auf Kurse und Hundeobleute.
+
+### ✅ Etappe 7b: Plan «Jagdhund in Schweden»
+
+Wunsch von Jules (2026-10-20): «Ich will meinen Hund in Schweden trainieren. Ergänze Trainings für spezifische Bedingungen in Schweden.» Der Zweck (Reise oder Jagd, dauerhaft dort, Vorbereitung zuhause) ist per Auswahlkarte gefragt, die Antwort steht noch aus. Bis dahin gilt die Annahme «Reise oder Jagd».
+
+Akzeptanzkriterien:
+
+- [x] Dritter Plan «Jagdhund in Schweden» in der Übersicht und als Planansicht, mit sieben Schritten: Einreise, Aufsicht und Leine, Jagdhund-Arbeit und Training, Jagen als Gast, Nachsuche, Wolf, Zecken und Gesundheit (Unit- und E2E-Test)
+- [x] Jede Aussage nennt ihre Quelle, die 14 Quellen haben Titel, Herausgeber, https-Adresse und Abrufdatum (Unit- und E2E-Test)
+- [x] Alle Übungen sind als «Vorschlag von Schnuffel» gekennzeichnet, jeder Schritt mit Übungen sagt, dass der Aufbau nicht belegt ist (Unit-Test)
+- [x] Lücken stehen im Plan unter «Was nicht belegt ist» (Unit- und E2E-Test)
+- [x] Kontrollkästchen, Offene Punkte, Sicherung und Offline funktionieren auch für diesen Plan (E2E-Test)
+
+Chain of Verification (20.10.2026), Plan Schweden:
+
+- Geprüft und übereinstimmend (mindestens zwei Quellen): Tollwutimpfung mit 21 Tagen Wartezeit nach der Grundimpfung, Chip, Heimtierausweis und Zollanmeldung (Jordbruksverket Reiseleitfaden, Jordbruksverket «Ta in hundar», Info Norden); keine Pflicht zur Entwurmung bei der Einreise, aber Empfehlung (zwei Seiten des Jordbruksverket); Aufsichtspflicht vom 1. März bis 20. August (Hundeaufsichtsgesetz 16 §, Länsstyrelsen Östergötland und Gävleborg, Jaktförordning 19 §); Hund für die Nachsuche innerhalb von zwei Stunden (Jaktförordning 17 §, Svenska Jägareförbundet).
+- Aus einer Quelle: Zeiten für Jagdhunde je Wildart (Jaktförordning 16 §, in zwei Abrufen gleich gelesen), Jagdgebühr und Waffeneinfuhr (Naturvårdsverket, Seite ohne Datum), Wolf (Faktenblatt Viltskadecenter, alt, und Test von 2014), Zecken (HSS 3/2023 nach SVA), FSME (SVA 2023), Kreuzotter (Pressemitteilung von Agria, vor allem zu Katzen).
+- Abweichungen und Auffälligkeiten: Die Seite «Ta in hundar» des Jordbruksverket nennt «Senast granskad 14.1.2025», die Metadaten 16.10.2026. Der Reiseleitfaden nennt die Schweiz bei den Ausweisen und beim Formular E9.204a, ordnet sie aber nicht selbst einer Gruppe zu, die andere Seite ordnet sie der Gruppe der EU-Länder zu. Das Jagdgesetz allein enthält die Sperrzeit nicht, sie steht im Hundeaufsichtsgesetz 16 §.
+- Nicht verwendet: Sveriges Radio (Abruf gesperrt), Naturkartan (kein Amt), Rechtsforen und Nachrichtenartikel.
+- **Einschränkung:** Die Seiten wurden über ein Abrufwerkzeug gelesen, das den Text zusammenfasst. Zahlen und Daten wurden doppelt abgerufen, wo möglich, aber nicht im Original-PDF gegengelesen. Das steht auch im Plan.
+- Nicht belegt: Anerkennung von Schweizer Prüfungen in Schweden, Auslandsjäger-Prüfung, Reiseregeln für «Wettkampf oder Training», Leinenpflicht in Nationalparks und Gemeinden, Regeln weiterer Landkreise, Klima und Gelände, Bär, Luchs und Wildschwein, schwedische Trainingsmethoden. Alles steht so im Plan.
 
 ### ⬜ Etappe 8: Auswertung
 

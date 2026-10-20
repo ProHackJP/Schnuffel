@@ -8,6 +8,7 @@
 // Form einer Übung: { name, why, sources[] } für Prüfungsteile aus einer Quelle, { name, why, own: true } für Vorschläge von Schnuffel.
 import * as HSH from './hsh-ausbildung.js';
 import { PLAN as JAGDHUND_BERN } from './jagdhund-be.js';
+import { PLAN as JAGDHUND_SCHWEDEN } from './jagdhund-se.js';
 
 // Der Plan zum Herdenschutzhund entsteht aus den Phasen und Übungen von Etappe 6.
 const DONE_WHEN_HSH = {
@@ -46,8 +47,8 @@ const HERDENSCHUTZHUND = {
   gaps: HSH.GAPS,
 };
 
-// Reihenfolge der Übersicht: zuerst der Jagdhund, weil Schnuffel eine Jagdhunde-App ist.
-export const PLANS = [JAGDHUND_BERN, HERDENSCHUTZHUND];
+// Reihenfolge der Übersicht: zuerst die Jagdhund-Pläne, weil Schnuffel eine Jagdhunde-App ist.
+export const PLANS = [JAGDHUND_BERN, JAGDHUND_SCHWEDEN, HERDENSCHUTZHUND];
 
 export function getPlan(id) {
   return PLANS.find((plan) => plan.id === id) ?? null;

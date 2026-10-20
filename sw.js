@@ -1,6 +1,6 @@
 // Service Worker: speichert die App-Dateien, damit Schnuffel ohne Internet startet.
 // Bei jeder Änderung an einer der Dateien unten CACHE_VERSION erhöhen, sonst sehen Nutzer die alte Version.
-const CACHE_VERSION = 'schnuffel-v7';
+const CACHE_VERSION = 'schnuffel-v8';
 
 const APP_SHELL = [
   './',
@@ -10,6 +10,7 @@ const APP_SHELL = [
   './src/content/herdenschutz.js',
   './src/content/hsh-ausbildung.js',
   './src/content/jagdhund-be.js',
+  './src/content/jagdhund-se.js',
   './src/content/plans.js',
   './src/router.js',
   './src/storage.js',

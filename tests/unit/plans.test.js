@@ -86,6 +86,34 @@ test('Jagdhund-Plan Bern: Voraussetzungen stehen in der richtigen Reihenfolge', 
   assert.ok(plan.gaps.some((g) => g.includes('Prüfungsordnung des BEJV')));
 });
 
+test('Jagdhund-Plan Schweden: Regeln mit Zahlen aus den Quellen, alle Übungen sind Vorschläge, Lücken bleiben sichtbar', () => {
+  const plan = getPlan('jagdhund-schweden');
+  assert.deepEqual(plan.steps.map((s) => s.id), ['einreise', 'aufsicht', 'training-zeiten', 'jagd-gast', 'nachsuche', 'raubtiere', 'gesundheit']);
+  const text = (id) => plan.steps.find((s) => s.id === id).facts.join(' ');
+  assert.match(text('einreise'), /21 Tage/);
+  assert.match(text('einreise'), /E9\.204a/);
+  assert.match(text('aufsicht'), /1\. März bis 20\. August/);
+  assert.match(text('training-zeiten'), /Elch vom 21\. August bis 31\. Januar/);
+  assert.match(text('nachsuche'), /zwei Stunden/);
+  // Keine Übung gibt sich als amtliche Vorgabe aus: Aufbau und Methoden stehen in keiner Quelle.
+  const exercises = plan.steps.flatMap((s) => s.exercises);
+  assert.ok(exercises.length >= 6);
+  assert.ok(exercises.every((e) => e.own === true));
+  // Jeder Schritt mit Übungen sagt, dass der Aufbau nicht belegt ist.
+  for (const step of plan.steps.filter((s) => s.exercises.length > 0)) {
+    assert.match(step.caveat, /steht in keiner geprüften Quelle/, step.id);
+  }
+  assert.ok(plan.gaps.some((g) => g.includes('lagen.nu')));
+  assert.ok(plan.gaps.some((g) => g.includes('Wolf')));
+  // Die Schweiz-Reise (Formular, Wartezeit) steht in der Quelle des Jordbruksverket.
+  assert.ok(plan.sources.some((s) => s.id === 'jv-resa' && s.url.startsWith('https://jordbruksverket.se/')));
+});
+
+test('Übungsnamen sind über alle Pläne eindeutig, damit Tagebuch und Tipphilfe nichts vermischen', () => {
+  const names = PLANS.flatMap((plan) => plan.steps.flatMap((step) => step.exercises.map((e) => e.name)));
+  assert.equal(new Set(names).size, names.length);
+});
+
 test('Übungsnamen aller Pläne stehen als Tipphilfe zur Verfügung', () => {
   const names = planExerciseNames();
   assert.ok(names.includes('Leinenführigkeit'));

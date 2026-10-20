@@ -42,7 +42,8 @@ Für die Browser-Tests einmalig `npx playwright install chromium` ausführen.
 | `src/content/herdenschutz.js` | Fachinhalt Herdenschutz mit Quellen (geprüft, siehe STATUS.md) |
 | `src/content/hsh-ausbildung.js` | Ausbildungsplan Herdenschutzhund mit Quellen (geprüft, siehe STATUS.md) |
 | `src/content/jagdhund-be.js` | Trainingsplan Jagdhund im Kanton Bern mit Quellen und Lücken (geprüft, siehe STATUS.md) |
-| `src/content/plans.js` | Die Trainingspläne als Schritte (Jagdhund Bern, Herdenschutzhund) |
+| `src/content/jagdhund-se.js` | Trainingsplan Jagdhund in Schweden mit Quellen und Lücken (geprüft, siehe STATUS.md) |
+| `src/content/plans.js` | Die Trainingspläne als Schritte (Jagdhund Bern, Jagdhund Schweden, Herdenschutzhund) |
 | `src/storage.js` | Speicher-Backends (IndexedDB, localStorage, Speicher für Tests) |
 | `sw.js` | Service Worker für den Offline-Betrieb |
 | `manifest.webmanifest` | Angaben für die Installation aufs Handy |

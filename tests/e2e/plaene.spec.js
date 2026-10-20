@@ -15,16 +15,17 @@ function step(page, n) {
   return page.getByRole('list', { name: 'Schritte' }).getByRole('listitem').filter({ has: page.getByRole('heading', { level: 2, name: new RegExp(`^Schritt ${n}:`) }) });
 }
 
-test('Plan-Übersicht zeigt beide Pläne und führt zum Plan', async ({ page }) => {
+test('Plan-Übersicht zeigt alle Pläne und führt zum Plan', async ({ page }) => {
   await page.goto('/');
   const nav = page.getByRole('navigation', { name: 'Hauptnavigation' });
   await nav.getByRole('link', { name: 'Pläne' }).click();
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Trainingspläne');
   await expect(nav.getByRole('link', { name: 'Pläne' })).toHaveAttribute('aria-current', 'page');
   const plans = page.getByRole('list', { name: 'Pläne' }).getByRole('listitem');
-  await expect(plans).toHaveCount(2);
+  await expect(plans).toHaveCount(3);
   await expect(plans.first()).toContainText('Jagdhund im Kanton Bern');
-  await expect(plans.nth(1)).toContainText('Herdenschutzhund');
+  await expect(plans.nth(1)).toContainText('Jagdhund in Schweden');
+  await expect(plans.nth(2)).toContainText('Herdenschutzhund');
   await expect(page.getByRole('note')).toContainText('Lege zuerst deinen Hund an');
 
   await plans.first().getByRole('link').click();
@@ -53,6 +54,40 @@ test('Jagdhund-Plan Bern zeigt Schritte mit Quellen, Hinweisen und Lücken', asy
     expect(await link.getAttribute('href')).toMatch(/^https:\/\//);
     expect(await link.getAttribute('rel')).toBe('noopener');
   }
+});
+
+test('Jagdhund-Plan Schweden zeigt Regeln, Quellen, Vorbehalte und Lücken', async ({ page }) => {
+  await page.goto('/#/plaene/jagdhund-schweden');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Jagdhund in Schweden');
+  await expect(page.getByText('Gilt für Schweden')).toBeVisible();
+  await expect(steps(page)).toHaveCount(7);
+  await expect(step(page, 1)).toContainText('Formular E9.204a');
+  await expect(step(page, 1)).toContainText('Quelle: Jordbruksverket, Info Norden');
+  await expect(step(page, 2)).toContainText('Vom 1. März bis 20. August müssen Hunde so beaufsichtigt werden');
+  await expect(step(page, 3)).toContainText('Elch vom 21. August bis 31. Januar');
+  await expect(step(page, 3)).toContainText('Östergötland');
+  await expect(step(page, 6)).toContainText('Das Faktenblatt ist alt');
+  // Alle Übungen sind Vorschläge, keine Prüfungsteile.
+  await expect(step(page, 2).getByRole('list', { name: 'Übungen Schritt 2' })).toContainText('Vorschlag von Schnuffel');
+  await expect(page.getByText('Prüfungsteil, Quelle')).toHaveCount(0);
+  await expect(page.getByRole('list', { name: 'Was nicht belegt ist' })).toContainText('lagen.nu');
+  const sources = page.getByRole('list', { name: 'Quellen' }).getByRole('link');
+  await expect(sources).toHaveCount(14);
+  for (const link of await sources.all()) {
+    expect(await link.getAttribute('href')).toMatch(/^https:\/\//);
+    expect(await link.getAttribute('rel')).toBe('noopener');
+  }
+});
+
+test('Schweden-Plan: Übung abhaken und ins Tagebuch übernehmen', async ({ page }) => {
+  await addDog(page, 'Arko');
+  await page.goto('/#/plaene/jagdhund-schweden');
+  await step(page, 2).getByRole('checkbox', { name: 'Leinenführigkeit im Wildgebiet' }).check();
+  await expect(step(page, 2)).toContainText('In Arbeit · 1 von 3 Übungen abgehakt');
+  await expect(page.getByText('Fortschritt von Arko: 0 von 7 Schritten geschafft, 1 in Arbeit, 1 von 9 Übungen abgehakt.')).toBeVisible();
+  const item = page.getByRole('list', { name: 'Übungen Schritt 3' }).getByRole('listitem').first();
+  await item.getByRole('link', { name: 'Ins Tagebuch' }).click();
+  await expect(page.getByLabel('Bezeichnung')).toHaveValue('Dummy-Apport an der Schleppleine');
 });
 
 test('Schritte abhaken: Fortschritt bleibt nach Neuladen und gilt je Hund', async ({ page }) => {

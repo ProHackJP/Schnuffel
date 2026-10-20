@@ -5,7 +5,7 @@ import { SECTIONS, SOURCES, EXERCISE_SUGGESTIONS, GAPS, MAP_URL } from './conten
 import * as HSH from './content/hsh-ausbildung.js';
 import { PLANS, getPlan, planExerciseNames, summarize, isDoing, isStarted, openPoints } from './content/plans.js';
 
-export const APP_VERSION = '0.7.0';
+export const APP_VERSION = '0.8.0';
 
 // Nur Vorschläge zur schnelleren Eingabe, jede andere Angabe ist ebenfalls möglich.
 const GAME_SUGGESTIONS = ['Reh', 'Rothirsch', 'Gämse', 'Wildschwein', 'Fuchs', 'Feldhase', 'Kaninchen', 'Fasan', 'Rebhuhn', 'Stockente', 'Taube'];
