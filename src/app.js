@@ -3,8 +3,9 @@ import { createStore, parseBackup, DATA_KEY, RATINGS, BACKUP_REMINDER_DAYS } fro
 import { openBrowserBackend } from './storage.js';
 import { SECTIONS, SOURCES, EXERCISE_SUGGESTIONS, GAPS, MAP_URL } from './content/herdenschutz.js';
 import * as HSH from './content/hsh-ausbildung.js';
+import { PLANS, getPlan, planExerciseNames, summarize, isDoing, isStarted, openPoints } from './content/plans.js';
 
-export const APP_VERSION = '0.5.0';
+export const APP_VERSION = '0.8.0';
 
 // Nur Vorschläge zur schnelleren Eingabe, jede andere Angabe ist ebenfalls möglich.
 const GAME_SUGGESTIONS = ['Reh', 'Rothirsch', 'Gämse', 'Wildschwein', 'Fuchs', 'Feldhase', 'Kaninchen', 'Fasan', 'Rebhuhn', 'Stockente', 'Taube'];
@@ -60,6 +61,151 @@ function downloadJson(data, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function countText(n, one, many) {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+// Auswahl des aktiven Hundes. Erscheint nur, wenn es mehrere Hunde gibt.
+async function dogBar(store) {
+  const dogs = await store.listDogs();
+  if (dogs.length < 2) return null;
+  const active = await store.getDog();
+  const select = h(
+    'select',
+    {
+      id: 'active-dog',
+      onchange: async () => {
+        await store.setActiveDog(select.value);
+        await render();
+      },
+    },
+    dogs.map((d) => h('option', { value: d.id, selected: d.id === active.id }, d.name)),
+  );
+  return h('div', { class: 'dog-bar' }, h('label', { for: 'active-dog' }, 'Aktiver Hund'), select);
+}
+
+// Fortschritt je Übung aus dem Tagebuch: Anzahl Einträge und letzte Bewertung (Einheiten sind neueste zuerst).
+function exerciseProgress(sessions) {
+  const progress = new Map();
+  for (const session of sessions) {
+    for (const exercise of session.exercises) {
+      const entry = progress.get(exercise.name) ?? { count: 0, lastRating: null };
+      if (entry.count === 0) entry.lastRating = exercise.rating;
+      entry.count += 1;
+      progress.set(exercise.name, entry);
+    }
+  }
+  return (name) => {
+    const p = progress.get(name);
+    if (!p) return 'noch nicht geübt';
+    return `${p.count}× geübt${p.lastRating ? `, zuletzt ${p.lastRating}/5` : ''}`;
+  };
+}
+
+// Kurzbezeichnungen der Quellen für den Fliesstext, ohne Doppelte.
+function publishersOf(sources, ids) {
+  const byId = Object.fromEntries(sources.map((s) => [s.id, s]));
+  return [...new Set(ids.map((id) => byId[id].short ?? byId[id].publisher))].join(', ');
+}
+
+function sourceList(sources) {
+  return h(
+    'ul',
+    { class: 'card rules sources', 'aria-label': 'Quellen' },
+    sources.map((s) =>
+      h('li', {}, h('a', { href: s.url, target: '_blank', rel: 'noopener' }, s.title), h('span', { class: 'muted' }, ` – ${s.publisher}, abgerufen am ${formatDate(s.retrieved)}`)),
+    ),
+  );
+}
+
+// Kontrollkästchen mit Beschriftung. Schlägt das Speichern fehl, springt der Haken zurück.
+function checkRow({ label, checked, onToggle, onError }) {
+  const input = h('input', { type: 'checkbox' });
+  input.checked = checked;
+  input.addEventListener('change', async () => {
+    const want = input.checked;
+    try {
+      await onToggle(want);
+    } catch (error) {
+      input.checked = !want;
+      onError(error);
+    }
+  });
+  return { input, row: h('label', { class: 'check' }, input, h('span', {}, label)) };
+}
+
+// Fortschritt eines Plans als Satz, zum Beispiel «3 von 7 Schritten geschafft, 1 in Arbeit, 4 von 12 Übungen abgehakt».
+function progressSentence(sum) {
+  const parts = [`${sum.done} von ${sum.total} Schritten geschafft`];
+  if (sum.doing) parts.push(`${sum.doing} in Arbeit`);
+  if (sum.exercisesTotal) parts.push(`${sum.exercisesDone} von ${sum.exercisesTotal} Übungen abgehakt`);
+  return parts.join(', ');
+}
+
+// Liste der offenen Punkte eines Plans. renderTitle bestimmt, wie der Schritt angezeigt wird (Link oder Sprungknopf).
+function openPointsList(points, renderTitle) {
+  return h(
+    'ul',
+    { class: 'open-points-list', 'aria-label': 'Offene Punkte' },
+    points.map(({ step, index, stepOpen, exercises }) =>
+      h(
+        'li',
+        {},
+        renderTitle(step, index),
+        !stepOpen && h('span', { class: 'muted' }, ' (Schritt geschafft)'),
+        exercises.length > 0 && h('ul', {}, exercises.map((e) => h('li', {}, e.name))),
+      ),
+    ),
+  );
+}
+
+// Formular für einen neuen oder bestehenden Hund. Nach dem ersten Speichern ändert es denselben Hund weiter.
+async function dogForm(store, dog) {
+  const message = h('p', { class: 'message', role: 'status' });
+  let currentId = dog?.id;
+  let currentName = dog?.name;
+  const sessionCount = dog ? (await store.listSessions(dog.id)).length : 0;
+  const form = h(
+    'form',
+    {
+      class: 'card',
+      novalidate: true,
+      onsubmit: async (event) => {
+        event.preventDefault();
+        try {
+          const saved = await store.saveDog({ ...Object.fromEntries(new FormData(form)), id: currentId });
+          currentId = saved.id;
+          currentName = saved.name;
+          showMessage(message, 'ok', `${saved.name} ist gespeichert.`);
+        } catch (error) {
+          showMessage(message, 'error', error.message);
+        }
+      },
+    },
+    field('dog-name', 'Name', h('input', { id: 'dog-name', name: 'name', required: true, maxlength: '60', autocomplete: 'off', value: dog?.name ?? '' })),
+    field('dog-breed', 'Rasse (optional)', h('input', { id: 'dog-breed', name: 'breed', maxlength: '80', autocomplete: 'off', value: dog?.breed ?? '' })),
+    field('dog-birth', 'Geburtsdatum (optional)', h('input', { id: 'dog-birth', name: 'birthDate', type: 'date', value: dog?.birthDate ?? '' })),
+    h('button', { type: 'submit' }, 'Speichern'),
+    message,
+    dog &&
+      h(
+        'button',
+        {
+          type: 'button',
+          class: 'danger',
+          onclick: async () => {
+            const what = `${currentName} wirklich löschen? Dabei werden auch ${countText(sessionCount, 'Einheit', 'Einheiten')} und der Planfortschritt dieses Hundes gelöscht. Das lässt sich nicht rückgängig machen.`;
+            if (!confirm(what)) return;
+            await store.deleteDog(dog.id);
+            location.hash = '#/hund';
+          },
+        },
+        'Hund löschen',
+      ),
+  );
+  return form;
+}
+
 const views = {
   async start(store) {
     const dog = await store.getDog();
@@ -67,9 +213,11 @@ const views = {
     return [
       h('h1', {}, dog ? `Hallo ${dog.name}!` : 'Willkommen bei Schnuffel'),
       h('p', {}, 'Schnuffel begleitet dich im Training mit deinem Jagdhund. Alle Daten bleiben auf deinem Gerät, die App funktioniert auch ohne Empfang.'),
+      await dogBar(store),
       dog
         ? h('a', { class: 'button', href: '#/training/neu' }, 'Training erfassen')
         : h('a', { class: 'button', href: '#/hund' }, 'Hund erfassen'),
+      h('p', {}, h('a', { href: '#/plaene' }, 'Trainingspläne ansehen')),
       backupDue &&
         h(
           'p',
@@ -81,30 +229,55 @@ const views = {
   },
 
   async hund(store) {
-    const dog = await store.getDog();
-    const message = h('p', { class: 'message', role: 'status' });
-    const form = h(
-      'form',
-      {
-        class: 'card',
-        novalidate: true,
-        onsubmit: async (event) => {
-          event.preventDefault();
-          try {
-            const saved = await store.saveDog(Object.fromEntries(new FormData(form)));
-            showMessage(message, 'ok', `${saved.name} ist gespeichert.`);
-          } catch (error) {
-            showMessage(message, 'error', error.message);
-          }
-        },
-      },
-      field('dog-name', 'Name', h('input', { id: 'dog-name', name: 'name', required: true, maxlength: '60', autocomplete: 'off', value: dog?.name ?? '' })),
-      field('dog-breed', 'Rasse (optional)', h('input', { id: 'dog-breed', name: 'breed', maxlength: '80', autocomplete: 'off', value: dog?.breed ?? '' })),
-      field('dog-birth', 'Geburtsdatum (optional)', h('input', { id: 'dog-birth', name: 'birthDate', type: 'date', value: dog?.birthDate ?? '' })),
-      h('button', { type: 'submit' }, 'Speichern'),
-      message,
-    );
-    return [h('h1', {}, 'Mein Hund'), form];
+    const dogs = await store.listDogs();
+    if (dogs.length === 0) return [h('h1', {}, 'Mein Hund'), await dogForm(store, null)];
+    const active = await store.getDog();
+    const counts = Object.fromEntries(await Promise.all(dogs.map(async (d) => [d.id, (await store.listSessions(d.id)).length])));
+    return [
+      h('h1', {}, dogs.length === 1 ? 'Mein Hund' : 'Meine Hunde'),
+      h(
+        'ul',
+        { class: 'dog-list', 'aria-label': 'Hunde' },
+        dogs.map((dog) =>
+          h(
+            'li',
+            { class: 'card dog' },
+            h('div', { class: 'title-row' }, h('strong', {}, dog.name), dog.id === active.id && h('span', { class: 'rating' }, 'Aktiv')),
+            h('span', { class: 'muted' }, [dog.breed, countText(counts[dog.id], 'Einheit', 'Einheiten')].filter(Boolean).join(' · ')),
+            h(
+              'div',
+              { class: 'row' },
+              dog.id !== active.id &&
+                h(
+                  'button',
+                  {
+                    type: 'button',
+                    class: 'secondary small',
+                    'aria-label': `${dog.name} zum aktiven Hund machen`,
+                    onclick: async () => {
+                      await store.setActiveDog(dog.id);
+                      await render();
+                    },
+                  },
+                  'Aktiv setzen',
+                ),
+              h('a', { class: 'button small secondary', href: `#/hund/${dog.id}`, 'aria-label': `${dog.name} bearbeiten` }, 'Bearbeiten'),
+            ),
+          ),
+        ),
+      ),
+      h('a', { class: 'button', href: '#/hund/neu' }, 'Weiteren Hund hinzufügen'),
+    ];
+  },
+
+  async 'hund-neu'(store) {
+    return [h('h1', {}, 'Neuer Hund'), await dogForm(store, null), h('p', {}, h('a', { href: '#/hund' }, 'Zu meinen Hunden'))];
+  },
+
+  async 'hund-edit'(store, route) {
+    const dog = (await store.listDogs()).find((d) => d.id === route.id);
+    if (!dog) return [h('h1', {}, 'Hund nicht gefunden'), h('a', { class: 'button', href: '#/hund' }, 'Zu meinen Hunden')];
+    return [h('h1', {}, 'Hund bearbeiten'), await dogForm(store, dog), h('p', {}, h('a', { href: '#/hund' }, 'Zu meinen Hunden'))];
   },
 
   async training(store) {
@@ -116,9 +289,10 @@ const views = {
         h('a', { class: 'button', href: '#/hund' }, 'Hund erfassen'),
       ];
     }
-    const sessions = await store.listSessions();
+    const sessions = await store.listSessions(dog.id);
     return [
       h('div', { class: 'title-row' }, h('h1', {}, 'Training'), h('a', { class: 'button small', href: '#/training/neu' }, 'Neue Einheit')),
+      await dogBar(store),
       sessions.length === 0
         ? h('p', { class: 'card' }, 'Noch keine Einheiten erfasst.')
         : h('ul', { class: 'session-list', 'aria-label': 'Trainingseinheiten' }, sessions.map(sessionItem)),
@@ -133,7 +307,7 @@ const views = {
     // Aus dem Ausbildungsplan kann eine Übung vorausgefüllt werden: #/training/neu?uebung=Name
     const params = new URLSearchParams(location.hash.split('?')[1] ?? '');
     const prefill = params.get('uebung') ? { exercises: [{ name: params.get('uebung').slice(0, 120) }] } : null;
-    return [h('h1', {}, 'Neue Einheit'), await sessionForm(store, null, prefill)];
+    return [h('h1', {}, 'Neue Einheit'), await dogBar(store), await sessionForm(store, null, prefill)];
   },
 
   async 'training-edit'(store, route) {
@@ -141,7 +315,9 @@ const views = {
     if (!session) {
       return [h('h1', {}, 'Einheit nicht gefunden'), h('a', { class: 'button', href: '#/training' }, 'Zur Übersicht')];
     }
-    return [h('h1', {}, 'Einheit bearbeiten'), await sessionForm(store, session)];
+    const dogs = await store.listDogs();
+    const owner = dogs.length > 1 ? dogs.find((d) => d.id === session.dogId) : null;
+    return [h('h1', {}, 'Einheit bearbeiten'), owner && h('p', { class: 'muted' }, `Einheit von ${owner.name}`), await sessionForm(store, session)];
   },
 
   async herdenschutz() {
@@ -189,23 +365,9 @@ const views = {
     const sourceRefs = (ids) =>
       h('p', { class: 'muted small' }, 'Quelle: ', ids.map((id, i) => [i > 0 && ', ', sourceById[id].publisher]));
 
-    // Fortschritt je Übung aus dem Tagebuch: Anzahl Einträge und letzte Bewertung (Einheiten sind neueste zuerst).
-    const progress = new Map();
-    if (await store.getDog()) {
-      for (const session of await store.listSessions()) {
-        for (const exercise of session.exercises) {
-          const entry = progress.get(exercise.name) ?? { count: 0, lastRating: null };
-          if (entry.count === 0) entry.lastRating = exercise.rating;
-          entry.count += 1;
-          progress.set(exercise.name, entry);
-        }
-      }
-    }
-    const progressText = (name) => {
-      const p = progress.get(name);
-      if (!p) return 'noch nicht geübt';
-      return `${p.count}× geübt${p.lastRating ? `, zuletzt ${p.lastRating}/5` : ''}`;
-    };
+    // Fortschritt je Übung aus dem Tagebuch des aktiven Hundes.
+    const dog = await store.getDog();
+    const progressText = exerciseProgress(dog ? await store.listSessions(dog.id) : []);
     const exerciseItem = (e) =>
       h(
         'li',
@@ -233,6 +395,13 @@ const views = {
         'p',
         { class: 'card notice', role: 'note' },
         'Herdenschutzhunde arbeiten selbstständig ohne Kommandos und sind keine Jagdhunde. Anerkannt wird nur, wer die Eignungsprüfung des Bundes besteht. Dieser Plan ersetzt weder den Sachkundekurs noch die Beratung.',
+      ),
+      await dogBar(store),
+      h(
+        'p',
+        { class: 'card' },
+        h('strong', {}, 'Lieber Schritt für Schritt? '),
+        h('a', { href: '#/plaene/herdenschutzhund' }, 'Zum Trainingsplan Herdenschutzhund'),
       ),
       h('h2', {}, 'Der offizielle Weg'),
       h('ul', { class: 'card rules' }, HSH.OFFICIAL_PATH.items.map((item) => h('li', {}, item))),
@@ -271,6 +440,245 @@ const views = {
     ];
   },
 
+  async plaene(store) {
+    const dog = await store.getDog();
+    const progress = dog ? await store.getProgress(dog.id) : {};
+    const checks = dog ? await store.getChecks(dog.id) : {};
+    return [
+      h('h1', {}, 'Trainingspläne'),
+      h('p', {}, 'Schritt für Schritt zum Ziel. Jeder Schritt nennt, was gilt und woher das stammt, und hat Übungen fürs Tagebuch. Du hakst Schritte und Übungen selbst ab, der Fortschritt gilt für den aktiven Hund. Was nicht abgehakt ist, bleibt offen.'),
+      await dogBar(store),
+      dog
+        ? h('p', {}, h('a', { href: '#/plaene/offen' }, 'Offene Punkte ansehen'))
+        : h('p', { class: 'card notice', role: 'note' }, 'Lege zuerst deinen Hund an, dann kannst du den Fortschritt speichern. ', h('a', { href: '#/hund' }, 'Hund erfassen')),
+      h(
+        'ul',
+        { class: 'plan-list', 'aria-label': 'Pläne' },
+        PLANS.map((plan) => {
+          const sum = summarize(plan, progress[plan.id], checks[plan.id]);
+          return h(
+            'li',
+            {},
+            h(
+              'a',
+              { class: 'card plan', href: `#/plaene/${plan.id}` },
+              h('strong', {}, plan.title),
+              h('span', { class: 'muted' }, plan.summary),
+              h('span', { class: 'muted small' }, plan.scope),
+              dog && h('span', { class: 'progress-text' }, progressSentence(sum)),
+            ),
+          );
+        }),
+      ),
+    ];
+  },
+
+  // Alles, was bei einem Hund noch offen ist: nicht abgehakte Schritte und Übungen der begonnenen Pläne.
+  async 'plaene-offen'(store) {
+    const dog = await store.getDog();
+    const head = [h('p', {}, h('a', { href: '#/plaene' }, 'Alle Pläne')), h('h1', {}, 'Offene Punkte')];
+    if (!dog) {
+      return [...head, h('p', { class: 'card notice', role: 'note' }, 'Lege zuerst deinen Hund an, dann kannst du Schritte und Übungen abhaken. ', h('a', { href: '#/hund' }, 'Hund erfassen'))];
+    }
+    const progress = await store.getProgress(dog.id);
+    const checks = await store.getChecks(dog.id);
+    const started = PLANS.filter((plan) => isStarted(plan, progress[plan.id], checks[plan.id]));
+    const notStarted = PLANS.filter((plan) => !started.includes(plan));
+    return [
+      ...head,
+      await dogBar(store),
+      h('p', {}, `Das ist bei ${dog.name} noch offen. Es erscheinen die Pläne, in denen schon etwas abgehakt ist.`),
+      started.length === 0 &&
+        h('p', { class: 'card notice', role: 'note' }, 'Noch nichts abgehakt. Öffne einen Plan und hake einen Schritt oder eine Übung ab, dann erscheinen die offenen Punkte hier.'),
+      started.map((plan) => {
+        const points = openPoints(plan, progress[plan.id], checks[plan.id]);
+        return h(
+          'section',
+          { class: 'card open-plan', 'aria-label': plan.title },
+          h('h2', {}, h('a', { href: `#/plaene/${plan.id}` }, plan.title)),
+          h('p', { class: 'progress-text' }, progressSentence(summarize(plan, progress[plan.id], checks[plan.id]))),
+          points.length === 0
+            ? h('p', {}, 'Alles abgehakt.')
+            : openPointsList(points, (step, index) => h('a', { href: `#/plaene/${plan.id}` }, `Schritt ${index + 1}: ${step.title}`)),
+        );
+      }),
+      notStarted.length > 0 &&
+        h('p', { class: 'muted' }, 'Noch nicht begonnen: ', notStarted.flatMap((plan, i) => [i > 0 && ', ', h('a', { href: `#/plaene/${plan.id}` }, plan.title)])),
+    ];
+  },
+
+  async 'plaene-plan'(store, route) {
+    const plan = getPlan(route.id);
+    if (!plan) return [h('h1', {}, 'Plan nicht gefunden'), h('a', { class: 'button', href: '#/plaene' }, 'Zu den Plänen')];
+    const dog = await store.getDog();
+    // Stand dieses Hundes in diesem Plan, in der Form, die plans.js erwartet.
+    const stepState = dog ? ((await store.getProgress(dog.id))[plan.id] ?? {}) : {};
+    const checkState = dog ? ((await store.getChecks(dog.id))[plan.id] ?? {}) : {};
+    const exerciseText = exerciseProgress(dog ? await store.listSessions(dog.id) : []);
+    const message = h('p', { class: 'message', role: 'status' });
+    const summaryEl = h('p', { class: 'progress-text' });
+    const openSummary = h('summary', {});
+    const openHolder = h('div', {});
+    const openBox = h('details', { class: 'card open-points' }, openSummary, openHolder);
+    openBox.open = dog ? isStarted(plan, stepState, checkState) : false;
+    const stepViews = [];
+    const onError = (error) => showMessage(message, 'error', error.message);
+
+    const statusOf = (step) => (stepState[step.id]?.status === 'done' ? 'done' : isDoing(step, stepState, checkState) ? 'doing' : 'open');
+    const isChecked = (step, name) => (checkState[step.id] ?? []).includes(name);
+
+    const refresh = () => {
+      if (!dog) return;
+      summaryEl.textContent = `Fortschritt von ${dog.name}: ${progressSentence(summarize(plan, stepState, checkState))}.`;
+      for (const { step, el, statusEl, stepBox, exerciseBoxes } of stepViews) {
+        const status = statusOf(step);
+        el.dataset.status = status;
+        stepBox.checked = status === 'done';
+        const checkedCount = step.exercises.filter((e) => isChecked(step, e.name)).length;
+        const parts = [{ open: 'Offen', doing: 'In Arbeit', done: 'Geschafft' }[status]];
+        if (step.exercises.length > 0) parts.push(`${checkedCount} von ${step.exercises.length} Übungen abgehakt`);
+        statusEl.textContent = parts.join(' · ');
+        if (status !== 'done' && step.exercises.length > 0 && checkedCount === step.exercises.length) {
+          statusEl.textContent += '. Alle Übungen sind abgehakt, prüfe, ob der Schritt geschafft ist';
+        }
+        for (const [name, box] of exerciseBoxes) {
+          box.checked = isChecked(step, name);
+          box.closest('li').dataset.checked = String(box.checked);
+        }
+      }
+      const points = openPoints(plan, stepState, checkState);
+      const count = points.reduce((n, p) => n + (p.stepOpen ? 1 : 0) + p.exercises.length, 0);
+      openSummary.textContent = count === 0 ? 'Offene Punkte: keine, alles abgehakt' : `Offene Punkte: ${count}`;
+      openHolder.replaceChildren(
+        count === 0
+          ? h('p', { class: 'muted' }, 'Alle Schritte und Übungen dieses Plans sind abgehakt.')
+          : openPointsList(points, (step, index) =>
+              h(
+                'button',
+                {
+                  type: 'button',
+                  class: 'link-button',
+                  onclick: () => {
+                    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+                    stepViews[index].el.scrollIntoView({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
+                  },
+                },
+                `Schritt ${index + 1}: ${step.title}`,
+              ),
+            ),
+      );
+    };
+
+    const exerciseItem = (step, e) => {
+      const checkbox = dog
+        ? checkRow({
+            label: h('strong', {}, e.name),
+            checked: false,
+            onError,
+            onToggle: async (checked) => {
+              await store.setExerciseChecked({ dogId: dog.id, planId: plan.id, stepId: step.id, exercise: e.name, checked });
+              const names = new Set(checkState[step.id] ?? []);
+              if (checked) names.add(e.name);
+              else names.delete(e.name);
+              checkState[step.id] = [...names];
+              showMessage(message, 'ok', '');
+              refresh();
+            },
+          })
+        : null;
+      const li = h(
+        'li',
+        {},
+        checkbox ? checkbox.row : h('strong', {}, e.name),
+        h('div', { class: 'exercise-info' }, h('span', { class: 'muted' }, e.why)),
+        h(
+          'div',
+          { class: 'small exercise-info' },
+          h(
+            'span',
+            { class: 'muted' },
+            [
+              e.own ? 'Vorschlag von Schnuffel' : `Prüfungsteil, Quelle: ${publishersOf(plan.sources, e.sources)}`,
+              e.criterion && `Prüfungskriterium: ${e.criterion}`,
+              `Fortschritt: ${exerciseText(e.name)}`,
+            ]
+              .filter(Boolean)
+              .join('. ') + '.',
+          ),
+          ' ',
+          h('a', { href: `#/training/neu?uebung=${encodeURIComponent(e.name)}` }, 'Ins Tagebuch'),
+        ),
+      );
+      return { li, box: checkbox?.input };
+    };
+
+    const stepItem = (step, index) => {
+      const exerciseBoxes = [];
+      const exerciseEls = step.exercises.map((e) => {
+        const { li, box } = exerciseItem(step, e);
+        if (box) exerciseBoxes.push([e.name, box]);
+        return li;
+      });
+      const stepCheck = dog
+        ? checkRow({
+            label: `Schritt ${index + 1} geschafft`,
+            checked: false,
+            onError,
+            onToggle: async (checked) => {
+              const status = checked ? 'done' : 'open';
+              await store.setStepStatus({ dogId: dog.id, planId: plan.id, stepId: step.id, status });
+              if (checked) stepState[step.id] = { status };
+              else delete stepState[step.id];
+              showMessage(message, 'ok', '');
+              refresh();
+            },
+          })
+        : null;
+      const statusEl = h('p', { class: 'step-status small' });
+      const el = h(
+        'li',
+        { class: 'card step' },
+        h('h2', {}, `Schritt ${index + 1}: ${step.title}`),
+        h('p', { class: 'muted small' }, step.timing),
+        stepCheck && h('div', { class: 'step-check' }, stepCheck.row, statusEl),
+        h('ul', { class: 'rules', 'aria-label': `Das gilt in Schritt ${index + 1}` }, step.facts.map((fact) => h('li', {}, fact))),
+        h('p', { class: 'muted small' }, 'Quelle: ', publishersOf(plan.sources, step.sources)),
+        step.caveat && h('p', { class: 'small caveat' }, h('strong', {}, 'Hinweis: '), step.caveat),
+        step.exercises.length > 0 && h('ul', { class: 'rules exercises-plan', 'aria-label': `Übungen Schritt ${index + 1}` }, exerciseEls),
+        h(
+          'p',
+          { class: 'done-when' },
+          h('strong', {}, 'Geschafft, wenn: '),
+          step.doneWhen.text,
+          ' ',
+          h('span', { class: 'muted small' }, step.doneWhen.own ? '(Vorschlag von Schnuffel)' : `(Quelle: ${publishersOf(plan.sources, step.doneWhen.sources)})`),
+        ),
+      );
+      stepViews.push({ step, el, statusEl, stepBox: stepCheck?.input, exerciseBoxes });
+      return el;
+    };
+
+    const items = plan.steps.map(stepItem);
+    refresh();
+    return [
+      h('p', {}, h('a', { href: '#/plaene' }, 'Alle Pläne')),
+      h('h1', {}, plan.title),
+      await dogBar(store),
+      h('p', {}, plan.summary),
+      h('p', { class: 'muted small' }, plan.scope),
+      h('p', { class: 'card notice', role: 'note' }, plan.notice),
+      dog
+        ? [summaryEl, openBox]
+        : h('p', { class: 'card notice', role: 'note' }, 'Lege zuerst deinen Hund an, dann kannst du Schritte und Übungen abhaken. ', h('a', { href: '#/hund' }, 'Hund erfassen')),
+      message,
+      h('ol', { class: 'steps', 'aria-label': 'Schritte' }, items),
+      h('h2', {}, 'Was nicht belegt ist'),
+      h('ul', { class: 'card rules', 'aria-label': 'Was nicht belegt ist' }, plan.gaps.map((gap) => h('li', {}, gap))),
+      h('h2', {}, 'Quellen'),
+      sourceList(plan.sources),
+    ];
+  },
+
   async info(store) {
     const data = await store.load();
     const message = h('p', { class: 'message', role: 'status' });
@@ -289,7 +697,10 @@ const views = {
           parseBackup(text);
           if (!confirm('Alle Daten auf diesem Gerät werden durch die Sicherung ersetzt. Fortfahren?')) return;
           const result = await store.importBackup(text);
-          showMessage(message, 'ok', `Wiederhergestellt: ${result.dogs} Hund, ${result.sessions} Einheiten.`);
+          const parts = [countText(result.dogs, 'Hund', 'Hunde'), countText(result.sessions, 'Einheit', 'Einheiten')];
+          if (result.planProgress > 0) parts.push(countText(result.planProgress, 'Planschritt', 'Planschritte'));
+          if (result.planChecks > 0) parts.push(countText(result.planChecks, 'abgehakte Übung', 'abgehakte Übungen'));
+          showMessage(message, 'ok', `Wiederhergestellt: ${parts.join(', ')}.`);
           lastExportEl.textContent = result.lastExportAt ? `Letzte Sicherung: ${formatDateTime(new Date(result.lastExportAt))}` : 'Noch keine Sicherung gemacht.';
         } catch (error) {
           showMessage(message, 'error', error.message);
@@ -353,12 +764,13 @@ function sessionItem(session) {
 async function sessionForm(store, session, prefill = null) {
   const message = h('p', { class: 'message', role: 'status' });
   const exerciseList = h('div', { class: 'exercises' });
+  const activeDogId = (await store.getDog())?.id;
   // Vorschläge: bereits verwendete Übungen zuerst, dann die Übungen aus Herdenschutz und Ausbildungsplan.
   const knownNames = [
     ...new Set([
       ...(await store.listSessions()).flatMap((s) => s.exercises.map((e) => e.name)),
       ...EXERCISE_SUGGESTIONS.map((e) => e.name),
-      ...HSH.EXERCISES.map((e) => e.name),
+      ...planExerciseNames(),
     ]),
   ];
 
@@ -406,6 +818,7 @@ async function sessionForm(store, session, prefill = null) {
         event.preventDefault();
         const data = Object.fromEntries(new FormData(form));
         data.id = session?.id;
+        data.dogId = session?.dogId ?? activeDogId;
         data.exercises = [...exerciseList.children].map((fs) =>
           Object.fromEntries([...fs.querySelectorAll('[data-field]')].map((el) => [el.dataset.field, el.value])),
         );

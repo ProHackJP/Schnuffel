@@ -1,10 +1,12 @@
 import { test, expect } from '@playwright/test';
 
-async function createDogAndSession(page) {
-  await page.goto('/#/hund');
-  await page.getByLabel('Name').fill('Arko');
-  await page.getByRole('button', { name: 'Speichern' }).click();
-  await expect(page.getByRole('status')).toHaveText('Arko ist gespeichert.');
+async function createDogAndSession(page, { createDog = true } = {}) {
+  if (createDog) {
+    await page.goto('/#/hund');
+    await page.getByLabel('Name').fill('Arko');
+    await page.getByRole('button', { name: 'Speichern' }).click();
+    await expect(page.getByRole('status')).toHaveText('Arko ist gespeichert.');
+  }
   await page.goto('/#/training/neu');
   await page.getByLabel('Datum').fill('2026-10-10');
   await page.getByRole('group', { name: 'Übung 1' }).getByLabel('Bezeichnung').fill('Schleppe');
@@ -20,7 +22,7 @@ test('Erinnerung an Sicherung erscheint erst mit Einheiten und verschwindet nach
   await page.goto('/#/');
   await expect(page.getByRole('note')).toHaveCount(0);
 
-  await createDogAndSession(page);
+  await createDogAndSession(page, { createDog: false });
   await page.goto('/#/');
   await expect(page.getByRole('note')).toContainText('nicht gesichert');
   await page.getByRole('link', { name: 'Jetzt sichern' }).click();
@@ -52,7 +54,7 @@ test('Sicherung exportieren und auf leerem Gerät wiederherstellen', async ({ pa
   await page2.goto('/#/info');
   page2.once('dialog', (dialog) => dialog.accept());
   await page2.getByLabel('Wiederherstellen aus Sicherungsdatei').setInputFiles(path);
-  await expect(page2.getByRole('status')).toHaveText('Wiederhergestellt: 1 Hund, 1 Einheiten.');
+  await expect(page2.getByRole('status')).toHaveText('Wiederhergestellt: 1 Hund, 1 Einheit.');
   await expect(page2.getByText(/^Letzte Sicherung: /)).toBeVisible();
   await page2.goto('/#/');
   await expect(page2.getByRole('heading', { level: 1 })).toHaveText('Hallo Arko!');
